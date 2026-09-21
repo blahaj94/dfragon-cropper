@@ -1,6 +1,6 @@
 # Agent instructions
 
-- Read `README.md` and `spike/windows-capture/README.md` first.
+- Read `README.md`, `docs/development.md` and `spike/windows-capture/README.md` first. Keep the root README focused on product behavior and visuals; detailed usage, configuration and development instructions belong under `docs/`.
 - The current 0.3.0 request is an end-to-end local Windows MVP: numeric and preview-drag ROI editing, profiles, explicit draft saves, recent capture history, original-PNG preference, tray/background behavior, explicit quit, single-instance handling and diagnostic logs. The user has authorized tray and single-instance work in this request. Do not add servers/uploads before the server integration details are supplied and authorized; OCR, authentication, multi-monitor capture, a DB, generic event bus and plugin framework remain outside scope.
 - Keep the profile selected for editing separate from the active capture profile. Unsaved name/coordinate drafts must not affect captures. Each capture snapshots the saved active profile ID/name and ROI list before taking its one source frame. No active profile, no saved ROI or a settings error must block app capture while preserving normal Windows PrintScreen forwarding.
 - Profile and ROI IDs are immutable safe integers and must never be reused after deletion. Coordinates are safe integers with x/y >= 0 and width/height > 0. Validate names, command shapes and all configuration data in main; renderer validation is not a trust boundary. Preserve the initial Default profile's two ROIs.

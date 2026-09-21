@@ -7,11 +7,18 @@ files:
   - out/**
   - package.json
   - '!**/{.env,.env.*,.npmrc,*.pem,*.key,*.pfx,*.p12}'
+extraResources:
+  - from: resources
+    to: .
+    filter:
+      - icon.png
+      - icon.ico
 asarUnpack:
   - node_modules/koffi/**
   - node_modules/@koromix/koffi-win32-*/**
 win:
   executableName: DFragonCropper
+  icon: resources/icon.ico
   target:
     - target: portable
       arch: [x64]

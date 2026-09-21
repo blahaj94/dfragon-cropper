@@ -45,7 +45,7 @@ Windows 10 Pro x64 build 19045, Primary Monitor 1920×1080에서 실제 portable
 
 검증 후 사용자가 Windows를 100%, 1920×1080으로 복원했다. 원시 결과는 Git에서 제외된 `.dev-captures/windows-verification/local-mvp-100-attempt1.json`과 `local-mvp-150-report.json`에 보존했다. 100%와 150%의 드래그 숫자가 다른 것은 실제 pointer와 CSS 경계의 소수점 좌표가 다르기 때문이며, 각각 표시한 정수 ROI와 저장 PNG의 대응을 검증했다.
 
-최종 실행 파일: `DFragonCropper-0.3.0-x64-portable.exe`, 101,082,160 bytes. SHA-256: `5d875f51dce41e2db0a69e5ee26f458e61e9dd6f8f12ddeaa429a40e74ca0eef`.
+이 검증에 사용한 실행 파일은 용 아이콘을 적용하기 전의 `DFragonCropper-0.3.0-x64-portable.exe`이며, 101,082,160 bytes다. SHA-256: `5d875f51dce41e2db0a69e5ee26f458e61e9dd6f8f12ddeaa429a40e74ca0eef`. 이후 아이콘 리소스를 교체한 빌드의 해시와 구분한다.
 
 새 좌표 입력과 트레이 lifecycle 때문에 Windows 실기 검증을 추가한다. 이전에 충분한 증거를 얻은 물리 키보드 20회 입력, 커서 제외와 GDI 원본 픽셀 충실도는 [기존 실기 결과](../spike/windows-capture/results.md)를 재사용한다.
 

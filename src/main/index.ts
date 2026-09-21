@@ -26,7 +26,7 @@ import { IPC, type CaptureHistory, type PreviewFrame, type SpikeState } from '..
 import { startPrintScreenListener } from './printscreen'
 import { loadProfileStore, ProfileFileConflictError, type ProfileStore } from './profiles'
 import { createLogger } from './logging'
-import { trayIcon } from './tray-icon'
+import { applicationIconPath } from './app-icon'
 
 app.setName('DFragonCropper')
 const development = !app.isPackaged
@@ -328,7 +328,7 @@ function installIpc(): void {
 function installTray(): void {
   if (process.platform !== 'win32') return
   try {
-    tray = new Tray(trayIcon())
+    tray = new Tray(applicationIconPath())
     tray.setToolTip('DFragonCropper')
     tray.setContextMenu(
       Menu.buildFromTemplate([
@@ -373,6 +373,7 @@ app
       minHeight: Math.min(600, workArea.height),
       show: false,
       autoHideMenuBar: true,
+      icon: applicationIconPath(),
       webPreferences: {
         preload: join(__dirname, '../preload/index.js'),
         contextIsolation: true,
