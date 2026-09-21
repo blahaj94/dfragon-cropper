@@ -4,7 +4,7 @@ const { spawn } = require('node:child_process')
 const { mkdir, mkdtemp, readFile, rm, stat, writeFile } = require('node:fs/promises')
 const { createServer } = require('node:net')
 const { basename, dirname, join, resolve } = require('node:path')
-const { chromium } = require('playwright')
+const { chromium } = require('@playwright/test')
 const { PNG } = require('pngjs')
 
 const argument = (name) => {
