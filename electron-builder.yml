@@ -1,0 +1,21 @@
+appId: io.github.blahaj94.dfragon-cropper
+productName: DFragonCropper
+directories:
+  buildResources: resources
+  output: dist
+files:
+  - out/**
+  - package.json
+  - '!**/{.env,.env.*,.npmrc,*.pem,*.key,*.pfx,*.p12}'
+asarUnpack:
+  - node_modules/koffi/**
+  - node_modules/@koromix/koffi-win32-*/**
+win:
+  executableName: DFragonCropper
+  target:
+    - target: portable
+      arch: [x64]
+portable:
+  artifactName: ${productName}-${version}-${arch}-portable.${ext}
+npmRebuild: false
+publish: null

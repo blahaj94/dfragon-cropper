@@ -1,0 +1,60 @@
+{
+  "name": "dfragon-cropper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Windows primary monitor capture and physical pixel ROI spike",
+  "main": "out/main/index.js",
+  "author": "DFragonCropper contributors",
+  "repository": "https://github.com/blahaj94/dfragon-cropper",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "postinstall": "node node_modules/electron/install.js",
+    "dev": "electron-vite dev",
+    "start": "electron-vite preview",
+    "build": "electron-vite build",
+    "build:win": "node scripts/check-windows-build.mjs && npm run typecheck && npm run build && electron-builder --win portable --x64 --publish never",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:ui": "npm run build && playwright test",
+    "spike:pixels": "npm run build && electron out/main/windows-check.js",
+    "verify": "npm run lint && npm run format:check && npm run typecheck && npm test && npm run test:ui"
+  },
+  "dependencies": {
+    "koffi": "3.3.1",
+    "pngjs": "7.0.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@playwright/test": "1.63.0",
+    "@types/node": "22.20.4",
+    "@types/pngjs": "6.0.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "5.2.0",
+    "electron": "44.4.3",
+    "electron-builder": "26.15.3",
+    "electron-vite": "5.0.0",
+    "eslint": "9.39.5",
+    "eslint-config-prettier": "10.1.8",
+    "globals": "16.5.0",
+    "prettier": "3.9.8",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.70.1",
+    "vite": "7.3.6",
+    "vitest": "4.1.11"
+  },
+  "allowScripts": {
+    "koffi@3.3.1": true,
+    "esbuild@0.25.12": true,
+    "esbuild@0.28.2": true,
+    "electron-winstaller@5.4.0": true,
+    "fsevents@2.3.3": true
+  }
+}

@@ -1,0 +1,41 @@
+export interface Region {
+  id: number
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface CaptureSummary {
+  eventId: string
+  capturedAt: string
+  outputDirectory: string
+  width: number
+  height: number
+  trigger: string
+  regions: Array<Region & { path: string }>
+}
+
+export interface SpikeState {
+  platform: string
+  mode: 'keyboard-hook' | 'global-shortcut' | 'fixture' | 'unsupported'
+  triggerStatus: string
+  busy: boolean
+  completed: number
+  failed: number
+  skipped: number
+  lastCapture: CaptureSummary | null
+  error: string | null
+}
+
+export interface SpikeApi {
+  getState(): Promise<SpikeState>
+  captureNow(): Promise<SpikeState>
+  onState(callback: (state: SpikeState) => void): () => void
+}
+
+export const IPC = {
+  getState: 'spike:get-state',
+  captureNow: 'spike:capture-now',
+  state: 'spike:state'
+} as const

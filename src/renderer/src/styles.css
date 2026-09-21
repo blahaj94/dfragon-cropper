@@ -1,0 +1,40 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color: #202020;
+  background: #fafafa;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  max-width: 900px;
+  padding: 24px;
+}
+
+h1 {
+  margin-top: 0;
+}
+
+h2 {
+  font-size: 1.2rem;
+}
+
+button {
+  padding: 8px 16px;
+  font: inherit;
+}
+
+dt {
+  font-weight: 600;
+}
+
+dd {
+  margin: 0 0 12px;
+  overflow-wrap: anywhere;
+}
+
+[role='alert'] {
+  color: #a11212;
+}

@@ -1,0 +1,15 @@
+node_modules/
+.codex/
+out/
+dist/
+.dev-captures/
+test-results/
+playwright-report/
+coverage/
+.env
+.env.*
+!.env.example
+*.log
+*.pem
+*.key
+.DS_Store
