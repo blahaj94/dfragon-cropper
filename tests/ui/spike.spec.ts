@@ -1,5 +1,5 @@
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { PNG } from 'pngjs'
@@ -7,8 +7,13 @@ import { PNG } from 'pngjs'
 let application: ElectronApplication | undefined
 let temporaryDirectory: string | undefined
 
-async function launchApp(mode?: 'success' | 'failure') {
-  temporaryDirectory = await mkdtemp(join(tmpdir(), 'dfragon-ui-'))
+async function launchApp(
+  mode?: 'success' | 'failure',
+  options: { configContents?: string; captureEnabled?: boolean } = {}
+) {
+  temporaryDirectory ??= await mkdtemp(join(tmpdir(), 'dfragon-ui-'))
+  const configFile = join(temporaryDirectory, 'config.json')
+  if (options.configContents !== undefined) await writeFile(configFile, options.configContents)
   const environment = { ...process.env }
   delete environment.ELECTRON_RUN_AS_NODE
   delete environment.ELECTRON_RENDERER_URL
@@ -20,12 +25,13 @@ async function launchApp(mode?: 'success' | 'failure') {
       ...environment,
       ...(mode ? { DFRAGON_FIXTURE: mode } : {}),
       DFRAGON_OUTPUT_DIR: join(temporaryDirectory, 'captures'),
-      DFRAGON_USER_DATA: join(temporaryDirectory, 'user-data')
+      DFRAGON_USER_DATA: join(temporaryDirectory, 'user-data'),
+      DFRAGON_CONFIG_FILE: configFile
     }
   })
   const page = await application.firstWindow()
   await expect(page.getByRole('heading', { name: 'DFragonCropper', exact: true })).toBeVisible()
-  if (mode)
+  if (mode && options.captureEnabled !== false)
     await expect(page.getByRole('button', { name: 'Capture Now', exact: true })).toBeEnabled()
   return page
 }
@@ -56,7 +62,7 @@ test('boots with an isolated renderer and reflects a saved fixture capture', asy
   ).toEqual({
     require: 'undefined',
     process: 'undefined',
-    exposedMethods: ['captureNow', 'getState', 'onState']
+    exposedMethods: ['captureNow', 'getState', 'onState', 'updateProfiles']
   })
   await page.getByRole('button', { name: 'Capture Now', exact: true }).click()
   await expect(page.getByTestId('capture-counters')).toHaveText(
@@ -101,9 +107,113 @@ test('shows capture failure without claiming a successful capture', async () => 
 test('explains Windows capture requirements on an unsupported host', async () => {
   test.skip(process.platform === 'win32', 'The native Windows host is supported.')
   const page = await launchApp()
-  await expect(page.getByRole('note')).toHaveText(
-    'Screen capture and PrintScreen detection require Windows 10.'
-  )
+  await expect(
+    page.getByText('Screen capture and PrintScreen detection require Windows 10.')
+  ).toBeVisible()
   await expect(page.getByRole('button', { name: 'Capture Now', exact: true })).toBeDisabled()
   await expect(page.getByText('Not yet captured', { exact: true })).toBeVisible()
+})
+
+test('edits saved profiles, preserves drafts during capture, and persists immutable ROI IDs', async () => {
+  let page = await launchApp('success')
+  await page.getByLabel('New profile name', { exact: true }).fill('Game')
+  await page.getByRole('button', { name: 'Create profile', exact: true }).click()
+  await expect(page.getByTestId('active-profile')).toHaveText('Active capture profile: Game (#2)')
+  await expect(page.getByLabel('Edit profile', { exact: true })).toHaveValue('2')
+  await expect(page.getByRole('button', { name: 'Capture Now', exact: true })).toBeDisabled()
+
+  // Editing selection and active capture selection have separate, visible effects.
+  await page.getByLabel('Edit profile', { exact: true }).selectOption('1')
+  await expect(page.getByTestId('active-profile')).toContainText('Game (#2)')
+  await page.getByRole('button', { name: 'Use for captures', exact: true }).click()
+  await expect(page.getByTestId('active-profile')).toContainText('Default (#1)')
+  await expect(page.getByRole('button', { name: 'Capture Now', exact: true })).toBeEnabled()
+  await page.getByLabel('Edit profile', { exact: true }).selectOption('2')
+  await page.getByRole('button', { name: 'Use for captures', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Capture Now', exact: true })).toBeDisabled()
+
+  await page.getByLabel('Profile name', { exact: true }).fill('Arena')
+  await page.getByRole('button', { name: 'Save name', exact: true }).click()
+  await expect(page.getByTestId('active-profile')).toContainText('Arena (#2)')
+  const newRoi = () => page.getByRole('group', { name: 'New ROI', exact: true })
+  await newRoi().getByLabel('X', { exact: true }).fill('17')
+  await newRoi().getByLabel('Y', { exact: true }).fill('29')
+  await newRoi().getByLabel('Width', { exact: true }).fill('31')
+  await newRoi().getByLabel('Height', { exact: true }).fill('19')
+  await newRoi().getByRole('button', { name: 'Add ROI', exact: true }).click()
+  const firstRoi = () => page.getByRole('group', { name: 'ROI #1', exact: true })
+  await expect(firstRoi().getByLabel('X', { exact: true })).toHaveValue('17')
+
+  await firstRoi().getByLabel('X', { exact: true }).fill('30')
+  await page.getByLabel('Profile name', { exact: true }).fill('Unsaved name')
+  await page.getByRole('button', { name: 'Capture Now', exact: true }).click()
+  await expect(page.getByTestId('capture-counters')).toContainText('Completed: 1')
+  await expect(firstRoi().getByLabel('X', { exact: true })).toHaveValue('30')
+  await expect(page.getByLabel('Profile name', { exact: true })).toHaveValue('Unsaved name')
+  const capture = (await page.evaluate(() => window.spike.getState())).lastCapture!
+  expect(capture.profile).toEqual({ id: 2, name: 'Arena' })
+  expect(capture.regions).toHaveLength(1)
+  expect(capture.regions[0]).toMatchObject({ id: 1, x: 17, y: 29, width: 31, height: 19 })
+  const source = PNG.sync.read(await readFile(join(capture.outputDirectory, 'original.png')))
+  const cropped = PNG.sync.read(await readFile(capture.regions[0].path))
+  expect([cropped.width, cropped.height]).toEqual([31, 19])
+  for (let row = 0; row < cropped.height; row++) {
+    const start = ((29 + row) * source.width + 17) * 4
+    expect(cropped.data.subarray(row * 31 * 4, (row + 1) * 31 * 4)).toEqual(
+      source.data.subarray(start, start + 31 * 4)
+    )
+  }
+  await page.getByLabel('Edit profile', { exact: true }).selectOption('1')
+  await page.getByLabel('Edit profile', { exact: true }).selectOption('2')
+  await expect(firstRoi().getByLabel('X', { exact: true })).toHaveValue('30')
+  await page.getByRole('button', { name: 'Discard name changes', exact: true }).click()
+  await expect(page.getByLabel('Profile name', { exact: true })).toHaveValue('Arena')
+  await firstRoi().getByRole('button', { name: 'Save ROI', exact: true }).click()
+  await expect(firstRoi().getByRole('button', { name: 'Save ROI', exact: true })).toBeDisabled()
+
+  await newRoi().getByRole('button', { name: 'Add ROI', exact: true }).click()
+  const secondRoi = page.getByRole('group', { name: 'ROI #2', exact: true })
+  await secondRoi.getByRole('button', { name: 'Delete ROI', exact: true }).click()
+  await expect(secondRoi).toHaveCount(0)
+  await newRoi().getByRole('button', { name: 'Add ROI', exact: true }).click()
+  await expect(page.getByRole('group', { name: 'ROI #3', exact: true })).toBeVisible()
+
+  await application!.close()
+  application = undefined
+  page = await launchApp('success')
+  await expect(page.getByTestId('active-profile')).toContainText('Arena (#2)')
+  await expect(firstRoi().getByLabel('X', { exact: true })).toHaveValue('30')
+  await expect(page.getByRole('group', { name: 'ROI #2', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('group', { name: 'ROI #3', exact: true })).toBeVisible()
+  const persisted = JSON.parse(await readFile(join(temporaryDirectory!, 'config.json'), 'utf8'))
+  expect(persisted.activeProfileId).toBe(2)
+  expect(
+    persisted.profiles
+      .find((profile: { id: number }) => profile.id === 2)
+      .regions.map((region: { id: number }) => region.id)
+  ).toEqual([1, 3])
+
+  await page.getByRole('button', { name: 'Delete profile', exact: true }).click()
+  await expect(page.getByTestId('active-profile')).toContainText('Default (#1)')
+  await page.getByRole('button', { name: 'Delete profile', exact: true }).click()
+  await expect(page.getByTestId('active-profile')).toHaveText('Active capture profile: None')
+  await expect(page.getByRole('button', { name: 'Capture Now', exact: true })).toBeDisabled()
+  await expect(page.getByLabel('Edit profile', { exact: true })).toHaveCount(0)
+})
+
+test('reports rejected edits and leaves a corrupt configuration unchanged', async () => {
+  let page = await launchApp('success')
+  await page.getByLabel('Profile name', { exact: true }).fill('   ')
+  await page.getByRole('button', { name: 'Save name', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('Changes were not saved.')
+  await expect(page.getByTestId('active-profile')).toContainText('Default (#1)')
+  await expect(page.getByLabel('Profile name', { exact: true })).toHaveValue('   ')
+  await application!.close()
+  application = undefined
+  const broken = '{ "schemaVersion": 1, "profiles": BROKEN }\n'
+  page = await launchApp('success', { configContents: broken, captureEnabled: false })
+  await expect(page.getByRole('alert')).toContainText('Profiles could not be loaded.')
+  await expect(page.getByRole('button', { name: 'Capture Now', exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Create profile', exact: true })).toHaveCount(0)
+  expect(await readFile(join(temporaryDirectory!, 'config.json'), 'utf8')).toBe(broken)
 })

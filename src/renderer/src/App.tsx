@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
-import type { SpikeState } from '../../shared/contracts'
+import type { ProfileCommand, SpikeState } from '../../shared/contracts'
+import { ProfileEditor, userError } from './ProfileEditor'
 
 export function App() {
   const [state, setState] = useState<SpikeState | null>(null)
   const [requestError, setRequestError] = useState<string | null>(null)
+  const [profileSaving, setProfileSaving] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -17,7 +19,7 @@ export function App() {
         if (active && !receivedUpdate) setState(initial)
       },
       (error: unknown) => {
-        if (active) setRequestError(error instanceof Error ? error.message : String(error))
+        if (active) setRequestError(userError(error))
       }
     )
     return () => {
@@ -31,12 +33,21 @@ export function App() {
     try {
       setState(await window.spike.captureNow())
     } catch (error) {
-      setRequestError(error instanceof Error ? error.message : String(error))
+      setRequestError(userError(error))
     }
   }
 
   const lastCapture = state?.lastCapture
   const error = requestError ?? state?.error
+  const activeProfile = state?.settings?.profiles.find(
+    (profile) => profile.id === state.settings?.activeProfileId
+  )
+
+  async function updateProfiles(command: ProfileCommand): Promise<SpikeState> {
+    const next = await window.spike.updateProfiles(command)
+    setState(next)
+    return next
+  }
 
   return (
     <main>
@@ -49,21 +60,51 @@ export function App() {
       )}
       {state?.mode === 'fixture' && <p role="note">Fixture mode: synthetic test frame.</p>}
 
+      <p data-testid="active-profile">
+        Active capture profile:{' '}
+        {activeProfile ? `${activeProfile.name} (#${activeProfile.id})` : 'None'}
+      </p>
+      {activeProfile?.regions.length === 0 && (
+        <p>Add an ROI to the active profile to enable capture.</p>
+      )}
+
       <button
         type="button"
         onClick={capture}
-        disabled={!state || state.busy || state.mode === 'unsupported'}
+        disabled={
+          !state ||
+          state.busy ||
+          profileSaving ||
+          state.mode === 'unsupported' ||
+          !!state.settingsError ||
+          !activeProfile?.regions.length
+        }
       >
         {state?.busy ? 'Capturing…' : 'Capture Now'}
       </button>
 
       <p role="status">{state?.triggerStatus ?? 'Loading capture status…'}</p>
-      {error && <p role="alert">{error}</p>}
+      {error && error !== state?.settingsError && <p role="alert">{error}</p>}
+
+      <ProfileEditor
+        settings={state?.settings ?? null}
+        settingsError={state?.settingsError ?? null}
+        onCommand={updateProfiles}
+        onSavingChange={setProfileSaving}
+      />
 
       <section aria-labelledby="last-capture-heading">
         <h2 id="last-capture-heading">Last capture</h2>
         {lastCapture ? (
           <dl>
+            {lastCapture.profile && (
+              <>
+                <dt>Captured profile</dt>
+                <dd>
+                  {lastCapture.profile.name} (#{lastCapture.profile.id})
+                </dd>
+              </>
+            )}
             <dt>Event</dt>
             <dd data-testid="capture-event">{lastCapture.eventId}</dd>
             <dt>Captured at</dt>

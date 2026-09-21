@@ -36,18 +36,21 @@ export interface CaptureResult {
   sourceSha256: string
   originalPath: string
   regions: (CaptureRegion & { path: string })[]
+  profile?: { id: number; name: string }
 }
 
 export interface CaptureOptions {
   outputRoot: string
   regions: readonly CaptureRegion[]
   trigger: CaptureTrigger
+  profile?: { id: number; name: string }
   /** Main-only dependency injection for deterministic verification; never supplied by IPC. */
   captureFrame?: () => PixelFrame
 }
 
 export async function captureAndSave(options: CaptureOptions): Promise<CaptureResult> {
   const regions = options.regions.map((region) => ({ ...region }))
+  const profile = options.profile ? { ...options.profile } : undefined
   validateRegions(regions)
   if (!options.outputRoot.trim()) throw new Error('A capture output directory is required.')
 
@@ -72,6 +75,7 @@ export async function captureAndSave(options: CaptureOptions): Promise<CaptureRe
     width: frame.width,
     height: frame.height,
     trigger: options.trigger,
+    ...(profile ? { profile } : {}),
     sourceSha256,
     originalPath,
     regions: regions.map((region) => ({
@@ -97,6 +101,7 @@ export async function captureAndSave(options: CaptureOptions): Promise<CaptureRe
           eventId,
           capturedAt: frame.capturedAt,
           trigger: options.trigger,
+          ...(profile ? { profile } : {}),
           coordinateSpace: 'primary-monitor-physical-pixels',
           source: {
             width: frame.width,

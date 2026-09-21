@@ -49,7 +49,12 @@ async function run() {
   await mkdir(dirname(output), { recursive: true })
   profile = await mkdtemp(join(dirname(output), 'product-flow-profile-'))
   outputRoot = join(appRoot, '.dev-captures', `product-flow-${Date.now()}`)
-  const environment = { ...process.env, DFRAGON_USER_DATA: profile, DFRAGON_OUTPUT_DIR: outputRoot }
+  const environment = {
+    ...process.env,
+    DFRAGON_USER_DATA: profile,
+    DFRAGON_OUTPUT_DIR: outputRoot,
+    DFRAGON_CONFIG_FILE: join(profile, 'config.json')
+  }
   for (const variable of [
     'DFRAGON_FIXTURE',
     'DFRAGON_TRIGGER',

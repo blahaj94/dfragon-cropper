@@ -58,7 +58,7 @@ For a physical-key check, add `--manual --ready <fresh-ready-json-path>` to the 
 For the built portable executable, use the separate wrapper-aware smoke test:
 
 ```powershell
-$portable = (Resolve-Path .\dist\DFragonCropper-0.1.0-x64-portable.exe).Path
+$portable = (Resolve-Path .\dist\DFragonCropper-0.2.0-x64-portable.exe).Path
 $smoke = (Resolve-Path .\spike\windows-capture\portable-smoke.cjs).Path
 $result = Join-Path $PWD '.dev-captures\verification\portable.json'
 .\spike\windows-capture\run-interactive.ps1 -ElectronPath $node -ScriptPath $smoke -ResultPath $result -ExtraArguments @('--executable-path', $portable) -TimeoutSeconds 90

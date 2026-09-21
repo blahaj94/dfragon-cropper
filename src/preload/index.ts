@@ -4,6 +4,7 @@ import { IPC, type SpikeApi, type SpikeState } from '../shared/contracts'
 const api: SpikeApi = {
   getState: () => ipcRenderer.invoke(IPC.getState),
   captureNow: () => ipcRenderer.invoke(IPC.captureNow),
+  updateProfiles: (command) => ipcRenderer.invoke(IPC.updateProfiles, command),
   onState: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, state: SpikeState) => callback(state)
     ipcRenderer.on(IPC.state, listener)
