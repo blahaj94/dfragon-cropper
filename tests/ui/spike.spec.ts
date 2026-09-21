@@ -223,10 +223,107 @@ test('reports rejected edits and leaves a corrupt configuration unchanged', asyn
   application = undefined
   const broken = '{ "schemaVersion": 1, "profiles": BROKEN }\n'
   page = await launchApp('success', { configContents: broken, captureEnabled: false })
-  await expect(page.getByRole('alert')).toContainText('Profiles could not be loaded.')
+  await expect(page.getByRole('alert')).toContainText('Configuration needs attention.')
   await expect(page.getByRole('button', { name: 'Capture Now', exact: true })).toBeDisabled()
   await expect(page.getByRole('button', { name: 'Create profile', exact: true })).toHaveCount(0)
   expect(await readFile(join(temporaryDirectory!, 'config.json'), 'utf8')).toBe(broken)
+})
+
+test('keeps configuration errors visible across tabs and blocks editing without losing drafts', async () => {
+  const page = await launchApp('success')
+  await page.getByLabel('Profile name', { exact: true }).fill('Unsaved profile name')
+  const firstRoi = page.getByRole('group', { name: 'ROI #1', exact: true })
+  await firstRoi.getByLabel('X', { exact: true }).fill('19')
+  await page.getByRole('tab', { name: 'Settings', exact: true }).click()
+  await page.getByLabel('Save original PNG', { exact: true }).uncheck()
+
+  const configFile = join(temporaryDirectory!, 'config.json')
+  const externalContents = `${await readFile(configFile, 'utf8')}\n`
+  await writeFile(configFile, externalContents)
+  await page.getByRole('button', { name: 'Save settings', exact: true }).click()
+  await expect(page.getByRole('alert')).toHaveCount(1)
+  await expect(page.getByRole('alert')).toContainText('Profile config changed outside this app.')
+  await expect(page.getByLabel('Save original PNG', { exact: true })).toBeDisabled()
+  await expect(page.getByLabel('Save original PNG', { exact: true })).not.toBeChecked()
+  await expect(page.getByRole('button', { name: 'Save settings', exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Capture Now', exact: true })).toBeDisabled()
+
+  await page.getByRole('tab', { name: 'Captures', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('Captures and editing are paused;')
+  await page.getByRole('tab', { name: 'Profiles', exact: true }).click()
+  await expect(page.getByRole('alert')).toHaveCount(1)
+  await expect(page.getByLabel('Profile name', { exact: true })).toHaveValue('Unsaved profile name')
+  await expect(page.getByLabel('Profile name', { exact: true })).toBeDisabled()
+  await expect(firstRoi.getByLabel('X', { exact: true })).toHaveValue('19')
+  await expect(firstRoi.getByLabel('X', { exact: true })).toBeDisabled()
+  await expect(
+    page.getByRole('button', { name: 'Refresh screen preview', exact: true })
+  ).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Save name', exact: true })).toBeDisabled()
+  await page.getByRole('tab', { name: 'Settings', exact: true }).click()
+  await expect(page.getByRole('alert')).toHaveCount(1)
+  await expect(page.getByLabel('Save original PNG', { exact: true })).not.toBeChecked()
+  const state = await page.evaluate(() => window.spike.getState())
+  expect(state.settings?.preferences.saveOriginal).toBe(true)
+  expect(state.settings?.profiles[0].name).toBe('Default')
+  expect(await readFile(configFile, 'utf8')).toBe(externalContents)
+})
+
+test('anchors a drag through scrolling at synthetic presentation scales and saves exact crop pixels', async () => {
+  const page = await launchApp('success')
+  await page.getByLabel('New profile name', { exact: true }).fill('Scrolling preview')
+  await page.getByRole('button', { name: 'Create profile', exact: true }).click()
+  await page.getByRole('button', { name: 'Refresh screen preview', exact: true }).click()
+  const screen = page.getByTestId('screen-preview')
+  await expect
+    .poll(() => screen.evaluate((image: HTMLImageElement) => image.naturalWidth))
+    .toBe(320)
+  // These are CSS presentation scales over the synthetic fixture, not Windows DPI evidence.
+  for (const scale of [1, 1.5]) {
+    await page
+      .getByRole('group', { name: 'Screen selection', exact: true })
+      .evaluate((surface, width) => {
+        ;(surface as HTMLElement).style.width = `${width}px`
+      }, 320 * scale)
+    await screen.evaluate((image) => image.scrollIntoView({ block: 'center' }))
+    const before = (await screen.boundingBox())!
+    await page.mouse.move(
+      before.x + (before.width * 60.5) / 320,
+      before.y + (before.height * 60.5) / 240
+    )
+    await page.mouse.down()
+    await page.evaluate(() => window.scrollBy(0, 80))
+    await expect.poll(async () => (await screen.boundingBox())!.y).toBeLessThan(before.y - 40)
+    const after = (await screen.boundingBox())!
+    await page.mouse.move(
+      after.x + (after.width * 10.5) / 320,
+      after.y + (after.height * 20.5) / 240,
+      { steps: 4 }
+    )
+    await page.mouse.up()
+    await expect(page.getByTestId('drawn-rectangle')).toHaveText(
+      'X 10 · Y 20 · Width 51 · Height 41 physical pixels'
+    )
+    await page.getByRole('button', { name: 'Add drawn ROI', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Add drawn ROI', exact: true })).toBeDisabled()
+  }
+  await page.getByRole('button', { name: 'Capture Now', exact: true }).click()
+  await expect(page.getByTestId('capture-counters')).toContainText('Completed: 1')
+  const capture = (await page.evaluate(() => window.spike.getState())).lastCapture!
+  expect(capture.regions).toHaveLength(2)
+  const source = PNG.sync.read(await readFile(join(capture.outputDirectory, 'original.png')))
+  expect([source.width, source.height]).toEqual([320, 240])
+  for (const region of capture.regions) {
+    expect(region).toMatchObject({ x: 10, y: 20, width: 51, height: 41 })
+    const cropped = PNG.sync.read(await readFile(region.path))
+    expect([cropped.width, cropped.height]).toEqual([51, 41])
+    for (let row = 0; row < cropped.height; row++) {
+      const offset = ((20 + row) * source.width + 10) * 4
+      expect(cropped.data.subarray(row * 51 * 4, (row + 1) * 51 * 4)).toEqual(
+        source.data.subarray(offset, offset + 51 * 4)
+      )
+    }
+  }
 })
 
 test('draws physical ROIs, previews saved history, and persists original-saving preferences', async () => {

@@ -4,12 +4,14 @@ import { userError } from './errors'
 
 export function Preferences({
   settings,
+  blocked,
   outputDirectory,
   backgroundAvailable,
   onCommand,
   onSavingChange
 }: {
   settings: ProfileSettings | null
+  blocked: boolean
   outputDirectory: string
   backgroundAvailable: boolean
   onCommand: (command: ProfileCommand) => Promise<SpikeState>
@@ -31,12 +33,13 @@ export function Preferences({
       <p className="file-path">{outputDirectory || 'Loading…'}</p>
       {!backgroundAvailable && <p>Tray controls become available on Windows.</p>}
       {!settings && <p>Settings are unavailable until the configuration loads successfully.</p>}
-      {error && <p role="alert">Settings were not saved. {error}</p>}
-      {notice && <p role="status">{notice}</p>}
+      {error && !blocked && <p role="alert">Settings were not saved. {error}</p>}
+      {notice && !blocked && <p role="status">{notice}</p>}
       {preferences && (
         <form
           onSubmit={async (event) => {
             event.preventDefault()
+            if (blocked || saving) return
             setSaving(true)
             onSavingChange(true)
             setError(null)
@@ -53,7 +56,7 @@ export function Preferences({
             }
           }}
         >
-          <fieldset className="editor-controls" disabled={saving}>
+          <fieldset className="editor-controls" disabled={saving || blocked}>
             <legend className="visually-hidden">Capture preferences</legend>
             <label className="checkbox">
               <input

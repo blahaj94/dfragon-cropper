@@ -131,6 +131,13 @@ export function App() {
       </section>
 
       <p role="status">{state?.triggerStatus ?? 'Loading capture status…'}</p>
+      {state?.settingsError && (
+        <p role="alert">
+          Configuration needs attention. {state.settingsError} Captures and editing are paused; any
+          unsaved edits are kept until you close the app. Close the app before checking config.json
+          or restoring a valid backup, then restart.
+        </p>
+      )}
       {error && error !== state?.settingsError && <p role="alert">{error}</p>}
 
       <nav className="tabs" role="tablist" aria-label="Workspace">
@@ -230,6 +237,7 @@ export function App() {
       >
         <Preferences
           settings={state?.settings ?? null}
+          blocked={!!state?.settingsError}
           outputDirectory={state?.outputDirectory ?? ''}
           backgroundAvailable={state?.backgroundAvailable ?? false}
           onCommand={updateProfiles}

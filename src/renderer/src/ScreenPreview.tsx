@@ -1,6 +1,6 @@
 import { useRef, useState, type PointerEvent } from 'react'
 import type { PreviewFrame, Region } from '../../shared/contracts'
-import { selectionRectangle, type Point } from './selection'
+import { selectionRectangle, sourcePoint, type Point } from './selection'
 import { userError } from './errors'
 
 type Rectangle = Omit<Region, 'id'>
@@ -48,15 +48,15 @@ export function ScreenPreview({
 
   function move(event: PointerEvent<HTMLDivElement>) {
     const drag = dragging.current
-    if (!drag || drag.pointerId !== event.pointerId || !image.current || !frame) return
+    if (!drag || drag.pointerId !== event.pointerId || !image.current || !frame || disabled) return
+    const end = sourcePoint(
+      { x: event.clientX, y: event.clientY },
+      image.current.getBoundingClientRect(),
+      frame
+    )
     setSelection({
       profileId: drag.profileId,
-      rectangle: selectionRectangle(
-        drag.start,
-        { x: event.clientX, y: event.clientY },
-        image.current.getBoundingClientRect(),
-        frame
-      )
+      rectangle: end ? selectionRectangle(drag.start, end, frame) : null
     })
   }
 
@@ -87,10 +87,16 @@ export function ScreenPreview({
             aria-label="Screen selection"
             onPointerDown={(event) => {
               if (event.button !== 0 || disabled || loading || !image.current?.naturalWidth) return
+              const start = sourcePoint(
+                { x: event.clientX, y: event.clientY },
+                image.current.getBoundingClientRect(),
+                frame
+              )
+              if (!start) return
               event.preventDefault()
               dragging.current = {
                 pointerId: event.pointerId,
-                start: { x: event.clientX, y: event.clientY },
+                start,
                 profileId
               }
               setSelection({ profileId, rectangle: null })

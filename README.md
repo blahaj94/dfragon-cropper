@@ -8,9 +8,9 @@
 
 DFragonCropper는 Windows 화면에서 반복해서 저장할 영역을 미리 지정해 두는 캡처 앱입니다. 영역들을 프로필로 묶고 PrintScreen을 누르면, 주 모니터의 **동일한 한 프레임**에서 각 영역을 잘라 원래 픽셀 그대로 저장합니다.
 
-**Windows 10 x64 · Portable · 로컬 저장 · 0.3.0 MVP**
+**Windows 10 x64 · Portable · 로컬 저장 · 0.3.1 미리보기**
 
-[빠른 시작](#빠른-시작) · [아키텍처](#아키텍처) · [사용 가이드](docs/user-guide.md) · [개발 가이드](docs/development.md)
+[Windows 다운로드](https://github.com/blahaj94/dfragon-cropper/releases) · [빠른 시작](#빠른-시작) · [아키텍처](#아키텍처) · [사용 가이드](docs/user-guide.md)
 
 ![주 모니터의 한 프레임에서 두 ROI를 각각 PNG로 저장하는 DFragonCropper 개념도](docs/images/capture-overview.svg)
 
@@ -31,7 +31,7 @@ _제품 동작을 설명하는 개념도입니다. 실제 앱 스크린샷이 �
 
 ## 빠른 시작
 
-Windows용 `DFragonCropper-0.3.0-x64-portable.exe`를 쓰기 가능한 폴더에 두고 실행하세요. 현재는 코드서명되지 않은 개발 빌드입니다. 실행 파일을 직접 만들려면 [Windows 빌드 방법](docs/development.md#windows-portable-빌드)을 참고하세요.
+[릴리스 페이지](https://github.com/blahaj94/dfragon-cropper/releases)에서 `DFragonCropper-0.3.1-x64-portable.exe`를 받아 쓰기 가능한 폴더에 두고 실행하세요. 설치 과정 없이 사용할 수 있는 코드서명되지 않은 미리보기 빌드입니다. 다운로드 확인과 업데이트 방법은 [배포 안내](docs/distribution.md)를 참고하세요.
 
 1. **영역 지정** — `Profiles` → `Refresh screen preview`로 화면을 가져옵니다. 미리보기에서 드래그한 뒤 `Add drawn ROI`로 저장합니다. 숫자 좌표로도 추가·수정할 수 있습니다.
 2. **프로필 선택** — 사용할 프로필에서 `Use for captures`를 누릅니다. 편집 중인 입력은 명시적으로 저장해야 캡처에 반영됩니다.
@@ -106,9 +106,10 @@ flowchart TB
 
 ## 더 알아보기
 
-| 문서                                      | 내용                                      |
-| ----------------------------------------- | ----------------------------------------- |
-| [사용 가이드](docs/user-guide.md)         | 프로필, ROI 편집, 캡처 이력과 트레이 사용 |
-| [설정·데이터 안내](docs/configuration.md) | 저장 위치, 설정 이관, 백업과 복구         |
-| [개발 가이드](docs/development.md)        | 개발 환경, 빌드, 코드 구조와 검증         |
-| [문서 목록](docs/README.md)               | 현재 가이드와 단계별 검증 기록            |
+| 문서                                      | 내용                                          |
+| ----------------------------------------- | --------------------------------------------- |
+| [사용 가이드](docs/user-guide.md)         | 프로필, ROI 편집, 캡처 이력과 트레이 사용     |
+| [설정·데이터 안내](docs/configuration.md) | 저장 위치, 설정 이관, 백업과 복구             |
+| [다운로드·업데이트](docs/distribution.md) | 실행 파일, 체크섬과 새 버전으로 교체하는 방법 |
+| [개발 가이드](docs/development.md)        | 개발 환경, 빌드, 코드 구조와 검증             |
+| [문서 목록](docs/README.md)               | 현재 가이드와 단계별 검증 기록                |

@@ -99,6 +99,7 @@ export function ProfileEditor({
     message: string,
     onSaved?: (state: SpikeState) => void
   ) {
+    if (settingsError || saving) return false
     setError(null)
     setNotice('')
     setSaving(true)
@@ -139,17 +140,11 @@ export function ProfileEditor({
         Save name and ROI edits to apply them. Capture Now and PrintScreen use the saved active
         profile.
       </p>
-      {settingsError && (
-        <p role="alert">
-          Profiles could not be loaded. {settingsError} The existing configuration has been kept.
-          Fix the file and restart the app.
-        </p>
-      )}
       {!settings && !settingsError && <p>Loading profiles…</p>}
-      {error && <p role="alert">{error}</p>}
-      {notice && <p role="status">{notice}</p>}
-      {settings && !settingsError && (
-        <fieldset className="editor-controls" disabled={saving}>
+      {error && !settingsError && <p role="alert">{error}</p>}
+      {notice && !settingsError && <p role="status">{notice}</p>}
+      {settings && (
+        <fieldset className="editor-controls" disabled={saving || !!settingsError}>
           <legend className="visually-hidden">Profile settings</legend>
           <form onSubmit={createProfile} noValidate className="actions">
             <label>
@@ -275,7 +270,7 @@ export function ProfileEditor({
                 profileId={selected.id}
                 profileName={selected.name}
                 regions={selected.regions}
-                disabled={previewDisabled || saving}
+                disabled={previewDisabled || saving || !!settingsError}
                 onBusyChange={onPreviewBusyChange}
                 onAdd={(rectangle) =>
                   save(

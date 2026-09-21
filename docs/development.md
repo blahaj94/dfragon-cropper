@@ -2,7 +2,7 @@
 
 [제품 소개](../README.md) · [문서 목록](README.md)
 
-DFragonCropper는 main/preload/renderer를 분리한 단일 Electron 패키지입니다. 현재 버전은 0.3.0이며, 로컬 Windows MVP를 개발하고 검증하는 절차를 이 문서에 정리합니다.
+DFragonCropper는 main/preload/renderer를 분리한 단일 Electron 패키지입니다. 현재 버전은 0.3.1이며, 로컬 Windows MVP를 개발하고 검증하는 절차를 이 문서에 정리합니다.
 
 ## 실행 환경
 
@@ -39,11 +39,13 @@ Windows x64 PC에서 `npm ci`를 실행한 뒤 빌드합니다. macOS에서 설�
 npm run build:win
 ```
 
-결과는 `dist/DFragonCropper-0.3.0-x64-portable.exe`입니다. 현재 개발 빌드는 코드서명된 안정 릴리스가 아닙니다. 앱은 임시 extraction 폴더 대신 실행 EXE 옆에 설정·캡처·로그를 저장하므로, EXE가 있는 폴더에 쓰기 권한이 필요합니다.
+결과는 `dist/DFragonCropper-0.3.1-x64-portable.exe`입니다. 현재 개발 빌드는 코드서명된 안정 릴리스가 아닙니다. 앱은 임시 extraction 폴더 대신 실행 EXE 옆에 설정·캡처·로그를 저장하므로, EXE가 있는 폴더에 쓰기 권한이 필요합니다.
 
 `electron-builder` 26.15.3의 `portable.unpackDirName: true`를 유지합니다. 각 실행이 별도 임시 폴더를 사용해야 두 번째 실행이 첫 실행의 파일을 교체하려 하지 않고 Electron의 단일 인스턴스 처리까지 도달합니다.
 
 `dist/`와 로컬 캡처·로그·설정 파일은 Git에서 제외됩니다. 저장 경로와 복구 절차는 [설정과 데이터](configuration.md)를 참조하세요.
+
+GitHub의 자동 검사·Windows 빌드·버전 태그 배포 절차는 [배포 안내](distribution.md#개발자를-위한-배포-흐름)에 정리했습니다. Hosted runner의 합성 UI 검사는 실제 Windows 10 데스크톱의 PrintScreen·DPI 검증을 대체하지 않습니다.
 
 ### 앱 아이콘
 
