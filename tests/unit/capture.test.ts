@@ -111,6 +111,7 @@ describe('one event, one source frame', () => {
     const result = await captureAndSave({
       outputRoot: await outputRoot(),
       regions,
+      profile: { id: 12, name: 'Edited profile' },
       trigger: 'fixture',
       captureFrame
     })
@@ -146,6 +147,7 @@ describe('one event, one source frame', () => {
       eventId: result.eventId,
       capturedAt: frame.capturedAt,
       trigger: 'fixture',
+      profile: { id: 12, name: 'Edited profile' },
       coordinateSpace: 'primary-monitor-physical-pixels',
       source: {
         width: 7,

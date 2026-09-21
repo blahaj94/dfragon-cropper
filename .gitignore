@@ -3,6 +3,7 @@ node_modules/
 out/
 dist/
 .dev-captures/
+.dev-config/
 test-results/
 playwright-report/
 coverage/

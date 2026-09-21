@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { captureAndSave, type Frame, type CaptureTrigger } from './capture'
 import { IPC, type SpikeState } from '../shared/contracts'
 import { startPrintScreenListener } from './printscreen'
+import { loadProfileStore, ProfileFileConflictError, type ProfileStore } from './profiles'
 
 app.setName('DFragonCropper')
 const development = !app.isPackaged
@@ -17,6 +18,7 @@ if (development && process.env.DFRAGON_USER_DATA) {
 let window: BrowserWindow | null = null
 let documentUrl = ''
 let stopPrintScreen = () => {}
+let profileStore: ProfileStore | null = null
 const state: SpikeState = {
   platform: process.platform,
   mode: fixture
@@ -32,13 +34,22 @@ const state: SpikeState = {
   failed: 0,
   skipped: 0,
   lastCapture: null,
-  error: null
+  error: null,
+  settings: null,
+  settingsError: null
 }
 
 // For a portable self-extracting EXE, process.execPath points inside the temporary extraction.
 function outputRoot(): string {
   if (development) return process.env.DFRAGON_OUTPUT_DIR || join(app.getAppPath(), '.dev-captures')
   return join(process.env.PORTABLE_EXECUTABLE_DIR || dirname(process.execPath), '.dev-captures')
+}
+
+function configPath(): string {
+  if (development) {
+    return process.env.DFRAGON_CONFIG_FILE || join(app.getAppPath(), '.dev-config', 'config.json')
+  }
+  return join(process.env.PORTABLE_EXECUTABLE_DIR || dirname(process.execPath), 'config.json')
 }
 
 function publish(): void {
@@ -70,6 +81,14 @@ async function capture(trigger: CaptureTrigger): Promise<SpikeState> {
     return state
   }
   if (state.mode === 'unsupported') return state
+  const activeProfile = state.settings?.profiles.find(
+    (profile) => profile.id === state.settings?.activeProfileId
+  )
+  if (state.settingsError || !activeProfile?.regions.length) {
+    state.error = state.settingsError || 'Select an active profile with at least one saved ROI.'
+    publish()
+    return state
+  }
   state.busy = true
   state.error = null
   publish()
@@ -77,10 +96,8 @@ async function capture(trigger: CaptureTrigger): Promise<SpikeState> {
     state.lastCapture = await captureAndSave({
       outputRoot: outputRoot(),
       trigger,
-      regions: [
-        { id: 1, x: 16, y: 24, width: 128, height: 96 },
-        { id: 2, x: 96, y: 48, width: 80, height: 64 }
-      ],
+      profile: { id: activeProfile.id, name: activeProfile.name },
+      regions: activeProfile.regions,
       ...(fixture ? { captureFrame: fixtureFrame } : {})
     })
     state.completed++
@@ -94,9 +111,9 @@ async function capture(trigger: CaptureTrigger): Promise<SpikeState> {
   return state
 }
 
-function assertTrustedSender(event: IpcMainInvokeEvent, args: unknown[]): void {
+function assertTrustedSender(event: IpcMainInvokeEvent, args: unknown[], argumentCount = 0): void {
   if (
-    args.length !== 0 ||
+    args.length !== argumentCount ||
     !window ||
     event.sender !== window.webContents ||
     event.senderFrame !== window.webContents.mainFrame ||
@@ -107,9 +124,17 @@ function assertTrustedSender(event: IpcMainInvokeEvent, args: unknown[]): void {
 }
 
 app.whenReady().then(async () => {
+  try {
+    profileStore = await loadProfileStore(configPath())
+    state.settings = profileStore.get()
+  } catch (error) {
+    state.settingsError = error instanceof Error ? error.message : String(error)
+  }
   window = new BrowserWindow({
-    width: 640,
-    height: 640,
+    width: 1040,
+    height: 800,
+    minWidth: 720,
+    minHeight: 600,
     show: false,
     autoHideMenuBar: true,
     webPreferences: {
@@ -134,6 +159,23 @@ app.whenReady().then(async () => {
   ipcMain.handle(IPC.captureNow, (event, ...args) => {
     assertTrustedSender(event, args)
     return capture('button')
+  })
+  ipcMain.handle(IPC.updateProfiles, async (event, ...args) => {
+    assertTrustedSender(event, args, 1)
+    if (!profileStore) throw new Error(state.settingsError || 'Profiles are not available.')
+    if (state.settingsError) throw new Error(state.settingsError)
+    try {
+      state.settings = await profileStore.apply(args[0])
+    } catch (error) {
+      if (error instanceof ProfileFileConflictError) {
+        state.settingsError = error.message
+        publish()
+      }
+      throw error
+    }
+    state.error = null
+    publish()
+    return state
   })
 
   if (state.mode === 'keyboard-hook') {

@@ -16,6 +16,7 @@ const outputArgument = argument('--output')
 if (process.platform !== 'win32' || !executableArgument || !outputArgument) {
   throw new Error('Run on Windows with --executable-path <portable EXE> --output <JSON>.')
 }
+const verifyProfiles = process.argv.includes('--verify-profiles')
 const executable = resolve(executableArgument)
 const output = resolve(outputArgument)
 const pause = (milliseconds) => new Promise((accept) => setTimeout(accept, milliseconds))
@@ -30,7 +31,9 @@ const alive = (pid) => {
 }
 const result = {
   schemaVersion: 1,
-  experiment: 'portable-EXE-native-button-capture',
+  experiment: verifyProfiles
+    ? 'portable-profile-editor-native-capture'
+    : 'portable-EXE-native-button-capture',
   transport: 'normal NSIS portable launch; Playwright over loopback CDP',
   injection: 'none; Capture Now button only',
   executable: basename(executable),
@@ -54,14 +57,12 @@ async function freePort() {
   return port
 }
 
-async function run() {
-  await mkdir(dirname(output), { recursive: true })
-  result.executableBytes = (await stat(executable)).size
-  profile = await mkdtemp(join(dirname(output), 'portable-profile-'))
+async function launchPortable() {
   const port = await freePort()
   const endpoint = `http://127.0.0.1:${port}`
   const environment = { ...process.env }
   for (const name of [
+    'DFRAGON_CONFIG_FILE',
     'DFRAGON_FIXTURE',
     'DFRAGON_TRIGGER',
     'DFRAGON_OUTPUT_DIR',
@@ -117,14 +118,98 @@ async function run() {
       process: typeof window.process,
       methods: Object.keys(window.spike).sort()
     })),
-    { require: 'undefined', process: 'undefined', methods: ['captureNow', 'getState', 'onState'] }
+    {
+      require: 'undefined',
+      process: 'undefined',
+      methods: ['captureNow', 'getState', 'onState', 'updateProfiles']
+    }
   )
   result.rendererBoundaryVerified = true
+}
+
+async function closeForRestart() {
+  await page.close()
+  await browser.close()
+  const deadline = Date.now() + 5_000
+  while ((alive(applicationPid) || alive(launcher?.pid)) && Date.now() < deadline) await pause(100)
+  assert(!alive(applicationPid) && !alive(launcher?.pid), 'Portable app did not exit cleanly')
+  page = undefined
+  browser = undefined
+  launcher = undefined
+  applicationPid = undefined
+}
+
+async function run() {
+  await mkdir(dirname(output), { recursive: true })
+  result.executableBytes = (await stat(executable)).size
+  profile = await mkdtemp(join(dirname(output), 'portable-profile-'))
+  if (verifyProfiles) {
+    // This mode intentionally edits configuration; only use a fresh isolated EXE directory.
+    await assert.rejects(stat(join(dirname(executable), 'config.json')), { code: 'ENOENT' })
+    await assert.rejects(stat(join(dirname(executable), 'config.json.bak')), { code: 'ENOENT' })
+  }
+  await launchPortable()
   const initial = await page.evaluate(() => window.spike.getState())
   assert.equal(initial.platform, 'win32')
   assert.equal(initial.mode, 'keyboard-hook')
   assert.equal(initial.error, null)
   assert.equal(initial.completed, 0)
+  assert.equal(initial.settingsError, null)
+  if (verifyProfiles) {
+    await page
+      .getByRole('textbox', { name: 'New profile name', exact: true })
+      .fill('Windows saved profile')
+    await page.getByRole('button', { name: 'Create profile', exact: true }).click()
+    await page.getByTestId('active-profile').filter({ hasText: 'Windows saved profile' }).waitFor()
+    const rectangles = [
+      { x: 31, y: 37, width: 137, height: 83 },
+      { x: 301, y: 121, width: 89, height: 71 }
+    ]
+    for (const rectangle of rectangles) {
+      const group = page.getByRole('group', { name: 'New ROI', exact: true })
+      for (const [field, value] of Object.entries(rectangle)) {
+        await group
+          .getByLabel(field[0].toUpperCase() + field.slice(1), { exact: true })
+          .fill(String(value))
+      }
+      await group.getByRole('button', { name: 'Add ROI', exact: true }).click()
+      // The next row must wait for the async disk save, not only the click dispatch.
+      const expectedCount = rectangles.indexOf(rectangle) + 1
+      const deadline = Date.now() + 5_000
+      let count = 0
+      do {
+        const current = await page.evaluate(() => window.spike.getState())
+        count = current.settings.profiles.find(
+          (entry) => entry.id === current.settings.activeProfileId
+        ).regions.length
+        if (count === expectedCount) break
+        await pause(50)
+      } while (Date.now() < deadline)
+      assert.equal(count, expectedCount)
+    }
+    const persisted = JSON.parse(await readFile(join(dirname(executable), 'config.json'), 'utf8'))
+    assert.equal(persisted.activeProfileId, 2)
+    assert.equal(persisted.profiles[1].name, 'Windows saved profile')
+    assert.deepEqual(
+      persisted.profiles[1].regions,
+      rectangles.map((rectangle, index) => ({ id: index + 1, ...rectangle }))
+    )
+    const backup = JSON.parse(await readFile(join(dirname(executable), 'config.json.bak'), 'utf8'))
+    assert.equal(backup.profiles[1].regions.length, 1)
+    await closeForRestart()
+    await launchPortable()
+    const reloaded = await page.evaluate(() => window.spike.getState())
+    assert.equal(reloaded.settingsError, null)
+    assert.deepEqual(reloaded.settings, persisted)
+    result.profiles = {
+      editedViaRenderer: true,
+      persistedBesidePortableExecutable: true,
+      backupPreserved: true,
+      restartPreservedSettings: true,
+      activeProfileId: 2,
+      regions: persisted.profiles[1].regions
+    }
+  }
   await page.getByRole('button', { name: 'Capture Now', exact: true }).click()
   const captureDeadline = Date.now() + 10_000
   let state
@@ -159,6 +244,22 @@ async function run() {
     const png = PNG.sync.read(await readFile(join(capture.outputDirectory, region.file)))
     assert.equal(png.width, region.width)
     assert.equal(png.height, region.height)
+    for (let y = 0; y < region.height; y++) {
+      const sourceOffset = ((region.y + y) * original.width + region.x) * 4
+      assert.deepEqual(
+        png.data.subarray(y * region.width * 4, (y + 1) * region.width * 4),
+        original.data.subarray(sourceOffset, sourceOffset + region.width * 4)
+      )
+    }
+  }
+  if (verifyProfiles) {
+    assert.deepEqual(metadata.profile, { id: 2, name: 'Windows saved profile' })
+    assert.deepEqual(capture.profile, metadata.profile)
+    assert.deepEqual(
+      metadata.regions.map(({ id, x, y, width, height }) => ({ id, x, y, width, height })),
+      result.profiles.regions
+    )
+    result.profiles.exactSourceCropBytes = true
   }
   result.capture = {
     completed: state.completed,
