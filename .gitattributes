@@ -1,0 +1,6 @@
+# Keep checkouts consistent with Prettier on Windows, macOS and Linux.
+* text=auto eol=lf
+
+# Icon assets must remain byte-for-byte identical.
+*.png binary
+*.ico binary
