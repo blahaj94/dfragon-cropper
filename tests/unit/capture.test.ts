@@ -124,7 +124,8 @@ describe('one event, one source frame', () => {
       'metadata.json',
       'original.png'
     ])
-    expect(PNG.sync.read(await readFile(result.originalPath)).data).toEqual(frame.rgba)
+    expect(result.originalSaved).toBe(true)
+    expect(PNG.sync.read(await readFile(result.originalPath!)).data).toEqual(frame.rgba)
     for (const region of result.regions) {
       const decoded = PNG.sync.read(await readFile(region.path))
       expect([decoded.width, decoded.height]).toEqual([region.width, region.height])
@@ -183,6 +184,44 @@ describe('one event, one source frame', () => {
     ).rejects.toThrow(/outside/)
     expect(captureFrame).toHaveBeenCalledTimes(1)
     expect(await readdir(root)).toEqual([])
+  })
+
+  it('omits the original file while saving exact crops from one unchanged source frame', async () => {
+    const frame = sourceFrame()
+    const sourceBytes = Buffer.from(frame.rgba)
+    const captureFrame = vi.fn(() => frame)
+    const result = await captureAndSave({
+      outputRoot: await outputRoot(),
+      regions: [
+        { id: 4, x: 2, y: 1, width: 4, height: 3 },
+        { id: 9, x: 0, y: 3, width: 2, height: 2 }
+      ],
+      trigger: 'fixture',
+      saveOriginal: false,
+      captureFrame
+    })
+    expect(captureFrame).toHaveBeenCalledTimes(1)
+    expect(result.originalSaved).toBe(false)
+    expect(result.originalPath).toBeUndefined()
+    expect((await readdir(result.outputDirectory)).sort()).toEqual([
+      '004.png',
+      '009.png',
+      'metadata.json'
+    ])
+    const metadata = JSON.parse(
+      await readFile(join(result.outputDirectory, 'metadata.json'), 'utf8')
+    )
+    expect(metadata.source.file).toBeNull()
+    for (const region of result.regions) {
+      const decoded = PNG.sync.read(await readFile(region.path))
+      for (let row = 0; row < region.height; row++) {
+        const start = ((region.y + row) * frame.width + region.x) * 4
+        expect(decoded.data.subarray(row * region.width * 4, (row + 1) * region.width * 4)).toEqual(
+          sourceBytes.subarray(start, start + region.width * 4)
+        )
+      }
+    }
+    expect(frame.rgba).toEqual(sourceBytes)
   })
 
   it('allocates different directories for captures with the same timestamp', async () => {

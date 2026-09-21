@@ -1,7 +1,7 @@
 :root {
   font-family: system-ui, sans-serif;
-  color: #202020;
-  background: #fafafa;
+  color: #202b36;
+  background: #f3f5f7;
 }
 
 body {
@@ -9,12 +9,15 @@ body {
 }
 
 main {
-  max-width: 900px;
+  max-width: 1200px;
+  margin: 0 auto;
   padding: 24px;
 }
 
 h1 {
   margin-top: 0;
+  margin-bottom: 6px;
+  font-size: 1.65rem;
 }
 
 h2 {
@@ -26,13 +29,27 @@ input,
 select {
   padding: 8px 16px;
   font: inherit;
+  border: 1px solid #bbc5cf;
+  border-radius: 6px;
+  background: white;
+  color: inherit;
 }
 
 button {
   cursor: pointer;
 }
+button:hover:not(:disabled) {
+  background: #e9eef2;
+}
 button:disabled {
   cursor: default;
+  opacity: 0.55;
+}
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 3px solid #247c96;
+  outline-offset: 2px;
 }
 
 label {
@@ -42,9 +59,7 @@ label {
 }
 
 .profile-editor {
-  border-block: 1px solid #ccc;
-  padding-block: 16px;
-  margin-block: 24px;
+  padding-block: 4px 16px;
 }
 
 .editor-controls {
@@ -66,7 +81,8 @@ label {
 .region {
   margin-block: 12px;
   padding: 12px;
-  border: 1px solid #bbb;
+  border: 1px solid #c8d1da;
+  border-radius: 8px;
   min-width: 0;
 }
 .rectangle-fields {
@@ -108,4 +124,175 @@ dd {
 
 [role='alert'] {
   color: #a11212;
+  background: #fff1f1;
+  padding: 12px;
+  border-radius: 6px;
+}
+
+.app-header,
+.capture-toolbar,
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.app-header p,
+.section-heading p {
+  color: #526375;
+  margin-top: 4px;
+}
+.app-header .actions {
+  flex-shrink: 0;
+}
+.capture-toolbar {
+  padding: 14px 18px;
+  border: 1px solid #d4dee5;
+  border-radius: 10px;
+  background: #fff;
+}
+.capture-toolbar p {
+  margin-block: 6px;
+}
+.capture-toolbar [data-testid='active-profile'] {
+  font-weight: 650;
+}
+.capture-toolbar .primary-button {
+  background: #12647a;
+  color: white;
+  border-color: #12647a;
+}
+.capture-toolbar .primary-button:hover:not(:disabled) {
+  background: #0a4c5e;
+}
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-top: 22px;
+  border-bottom: 1px solid #c8d1da;
+}
+.tabs button {
+  border: 0;
+  border-radius: 6px 6px 0 0;
+  padding: 12px 20px;
+  background: transparent;
+}
+.tabs button[aria-selected='true'] {
+  background: #fff;
+  box-shadow: inset 0 -3px #12647a;
+  font-weight: 650;
+}
+[role='tabpanel'] {
+  background: white;
+  padding: 20px;
+  border: 1px solid #d4dee5;
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
+}
+.screen-preview {
+  margin-top: 24px;
+  padding: 16px;
+  border-radius: 8px;
+  background: #f4f7fa;
+}
+.section-heading h3,
+.section-heading h2 {
+  margin-top: 0;
+}
+.selection-surface {
+  position: relative;
+  touch-action: none;
+  user-select: none;
+  cursor: crosshair;
+  overflow: hidden;
+}
+.selection-surface img {
+  display: block;
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+.selection-surface svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.saved-region {
+  fill: #254e691a;
+  stroke: #355570;
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+.drawn-region {
+  fill: #00b8d933;
+  stroke: #00c9ee;
+  stroke-width: 2;
+}
+.selection-readout {
+  font-variant-numeric: tabular-nums;
+}
+.history-selectors {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 16px;
+}
+.history-selectors select {
+  width: 100%;
+}
+.history-image {
+  padding: 12px;
+  background: #edf1f5;
+  border-radius: 8px;
+  overflow: auto;
+}
+.history-image img {
+  display: block;
+  max-width: 100%;
+  max-height: 600px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+.checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+  font-weight: 600;
+}
+.checkbox input {
+  width: 18px;
+  height: 18px;
+}
+.file-path {
+  overflow-wrap: anywhere;
+  padding: 12px;
+  background: #edf1f5;
+  border-radius: 6px;
+}
+.last-capture {
+  border-top: 1px solid #d4dee5;
+  margin-top: 20px;
+}
+[data-testid='capture-counters'] {
+  color: #526375;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 850px) {
+  .app-header,
+  .capture-toolbar,
+  .section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .history-selectors {
+    grid-template-columns: 1fr;
+  }
+  main {
+    padding: 16px;
+  }
 }

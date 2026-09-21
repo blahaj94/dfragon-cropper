@@ -14,13 +14,15 @@ export interface Profile {
 }
 
 export interface ProfileSettings {
-  schemaVersion: 1
+  schemaVersion: 2
   nextProfileId: number
   activeProfileId: number | null
   profiles: Profile[]
+  preferences: { saveOriginal: boolean; closeToTray: boolean }
 }
 
 export type ProfileCommand =
+  | { type: 'set-preferences'; saveOriginal: boolean; closeToTray: boolean }
   | { type: 'create-profile'; name: string }
   | { type: 'rename-profile'; profileId: number; name: string }
   | { type: 'delete-profile'; profileId: number }
@@ -38,6 +40,20 @@ export interface CaptureSummary {
   trigger: string
   regions: Array<Region & { path: string }>
   profile?: { id: number; name: string }
+  originalSaved?: boolean
+}
+
+export interface PreviewFrame {
+  width: number
+  height: number
+  capturedAt: string
+  dataUrl: string
+}
+
+export interface CaptureHistory {
+  events: CaptureSummary[]
+  skippedEntries: number
+  hasMore: boolean
 }
 
 export interface SpikeState {
@@ -52,6 +68,8 @@ export interface SpikeState {
   error: string | null
   settings: ProfileSettings | null
   settingsError: string | null
+  outputDirectory: string
+  backgroundAvailable: boolean
 }
 
 export interface SpikeApi {
@@ -59,11 +77,23 @@ export interface SpikeApi {
   captureNow(): Promise<SpikeState>
   onState(callback: (state: SpikeState) => void): () => void
   updateProfiles(command: ProfileCommand): Promise<SpikeState>
+  previewScreen(): Promise<PreviewFrame>
+  listCaptures(): Promise<CaptureHistory>
+  readCaptureImage(eventId: string, regionId: number | null): Promise<string>
+  openCaptureFolder(eventId?: string): Promise<void>
+  minimizeToTray(): Promise<void>
+  quit(): Promise<void>
 }
 
 export const IPC = {
   getState: 'spike:get-state',
   captureNow: 'spike:capture-now',
   state: 'spike:state',
-  updateProfiles: 'profiles:update'
+  updateProfiles: 'profiles:update',
+  previewScreen: 'capture:preview',
+  listCaptures: 'capture:list',
+  readCaptureImage: 'capture:image',
+  openCaptureFolder: 'capture:open-folder',
+  minimizeToTray: 'app:hide',
+  quit: 'app:quit'
 } as const

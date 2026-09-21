@@ -23,6 +23,7 @@ export {
 } from './pixels'
 export type { CaptureRegion, PixelFrame } from './pixels'
 export type { PixelFrame as Frame } from './pixels'
+export { listCaptures, readCaptureImage, resolveCaptureFolder } from './history'
 
 export type CaptureTrigger = 'button' | 'printscreen' | 'fixture' | 'native-pixel-check'
 
@@ -34,7 +35,8 @@ export interface CaptureResult {
   height: number
   trigger: CaptureTrigger
   sourceSha256: string
-  originalPath: string
+  originalSaved: boolean
+  originalPath?: string
   regions: (CaptureRegion & { path: string })[]
   profile?: { id: number; name: string }
 }
@@ -44,6 +46,7 @@ export interface CaptureOptions {
   regions: readonly CaptureRegion[]
   trigger: CaptureTrigger
   profile?: { id: number; name: string }
+  saveOriginal?: boolean
   /** Main-only dependency injection for deterministic verification; never supplied by IPC. */
   captureFrame?: () => PixelFrame
 }
@@ -51,6 +54,8 @@ export interface CaptureOptions {
 export async function captureAndSave(options: CaptureOptions): Promise<CaptureResult> {
   const regions = options.regions.map((region) => ({ ...region }))
   const profile = options.profile ? { ...options.profile } : undefined
+  const saveOriginal = options.saveOriginal === undefined ? true : options.saveOriginal
+  if (typeof saveOriginal !== 'boolean') throw new Error('saveOriginal must be a boolean.')
   validateRegions(regions)
   if (!options.outputRoot.trim()) throw new Error('A capture output directory is required.')
 
@@ -77,7 +82,8 @@ export async function captureAndSave(options: CaptureOptions): Promise<CaptureRe
     trigger: options.trigger,
     ...(profile ? { profile } : {}),
     sourceSha256,
-    originalPath,
+    originalSaved: saveOriginal,
+    ...(saveOriginal ? { originalPath } : {}),
     regions: regions.map((region) => ({
       ...region,
       path: join(outputDirectory, roiFilename(region.id))
@@ -88,7 +94,7 @@ export async function captureAndSave(options: CaptureOptions): Promise<CaptureRe
   // Exclusive directory creation: a collision must fail, never overwrite an earlier event.
   await mkdir(outputDirectory)
   try {
-    await writeFile(originalPath, encodeFramePng(frame), { flag: 'wx' })
+    if (saveOriginal) await writeFile(originalPath, encodeFramePng(frame), { flag: 'wx' })
     for (const region of result.regions) {
       await writeFile(region.path, encodeFramePng(cropFrame(frame, region)), { flag: 'wx' })
     }
@@ -110,7 +116,7 @@ export async function captureAndSave(options: CaptureOptions): Promise<CaptureRe
             backend: frame.backend,
             deviceName: frame.deviceName,
             rgbaSha256: sourceSha256,
-            file: 'original.png'
+            file: saveOriginal ? 'original.png' : null
           },
           regions: regions.map((region) => ({ ...region, file: roiFilename(region.id) }))
         },

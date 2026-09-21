@@ -1,11 +1,26 @@
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { loadProfileStore, ProfileFileConflictError } from '../../src/main/profiles'
+
+const renameFailure = vi.hoisted(() => ({ target: null as string | null }))
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>()
+  return {
+    ...actual,
+    rename: async (...args: Parameters<typeof actual.rename>) => {
+      if (args[1] === renameFailure.target) {
+        throw Object.assign(new Error('Simulated config replacement failure'), { code: 'EACCES' })
+      }
+      return actual.rename(...args)
+    }
+  }
+})
 
 const directories: string[] = []
 afterEach(async () => {
+  renameFailure.target = null
   await Promise.all(
     directories.splice(0).map((directory) => rm(directory, { recursive: true, force: true }))
   )
@@ -18,15 +33,33 @@ async function configPath(): Promise<string> {
 }
 
 const rectangle = { x: 3, y: 7, width: 11, height: 13 }
+const legacySettings = {
+  schemaVersion: 1,
+  nextProfileId: 40,
+  activeProfileId: 17,
+  profiles: [
+    {
+      id: 4,
+      name: '  Legacy profile  ',
+      nextRegionId: 19,
+      regions: [
+        { id: 8, ...rectangle },
+        { id: 15, ...rectangle, x: 27 }
+      ]
+    },
+    { id: 17, name: 'Empty profile', nextRegionId: 12, regions: [] }
+  ]
+}
 
 describe('persistent profile editing', () => {
   it('creates the default config once and returns detached snapshots', async () => {
     const path = await configPath()
     const store = await loadProfileStore(path)
     expect(store.get()).toEqual({
-      schemaVersion: 1,
+      schemaVersion: 2,
       nextProfileId: 2,
       activeProfileId: 1,
+      preferences: { saveOriginal: true, closeToTray: true },
       profiles: [
         {
           id: 1,
@@ -41,7 +74,9 @@ describe('persistent profile editing', () => {
     })
     const snapshot = store.get()
     snapshot.profiles[0].regions[0].x = 999
+    snapshot.preferences.saveOriginal = false
     expect(store.get().profiles[0].regions[0].x).toBe(16)
+    expect(store.get().preferences.saveOriginal).toBe(true)
     expect((await loadProfileStore(path)).get()).toEqual(store.get())
     expect(await readdir(dirname(path))).toEqual(['config.json'])
   })
@@ -124,6 +159,24 @@ describe('persistent profile editing', () => {
     expect((await loadProfileStore(path)).get()).toEqual(store.get())
   })
 
+  it('serializes preference changes with profile edits and preserves the previous valid backup', async () => {
+    const path = await configPath()
+    const store = await loadProfileStore(path)
+    const preferenceInput = { type: 'set-preferences', saveOriginal: false, closeToTray: false }
+    const first = store.apply(preferenceInput)
+    preferenceInput.saveOriginal = true
+    const second = store.apply({
+      type: 'rename-profile',
+      profileId: 1,
+      name: 'Retained preferences'
+    })
+    const [preferencesSaved, renamed] = await Promise.all([first, second])
+    expect(preferencesSaved.preferences).toEqual({ saveOriginal: false, closeToTray: false })
+    expect(renamed.preferences).toEqual(preferencesSaved.preferences)
+    expect(JSON.parse(await readFile(`${path}.bak`, 'utf8'))).toEqual(preferencesSaved)
+    expect((await loadProfileStore(path)).get()).toEqual(renamed)
+  })
+
   it('does not commit memory or consume IDs after a filesystem failure, and the queue recovers', async () => {
     const path = await configPath()
     const store = await loadProfileStore(path)
@@ -142,10 +195,82 @@ describe('persistent profile editing', () => {
   })
 })
 
+describe('version 1 migration', () => {
+  it('preserves profiles, gaps, counters and exact legacy backup while adding enabled defaults', async () => {
+    const path = await configPath()
+    const original = `${JSON.stringify(legacySettings, null, 4)}\n\n`
+    await writeFile(path, original)
+    await writeFile(`${path}.bak`, 'older backup is replaced only after v1 validation')
+    const store = await loadProfileStore(path)
+    const expected = {
+      ...legacySettings,
+      schemaVersion: 2,
+      preferences: { saveOriginal: true, closeToTray: true }
+    }
+    expect(store.get()).toEqual(expected)
+    expect(JSON.parse(await readFile(path, 'utf8'))).toEqual(expected)
+    expect(await readFile(`${path}.bak`, 'utf8')).toBe(original)
+    const migrated = await readFile(path, 'utf8')
+    expect((await loadProfileStore(path)).get()).toEqual(expected)
+    expect(await readFile(path, 'utf8')).toBe(migrated)
+    expect(await readFile(`${path}.bak`, 'utf8')).toBe(original)
+    await store.apply({ type: 'add-region', profileId: 4, rectangle })
+    expect(store.get().profiles[0].regions.at(-1)?.id).toBe(19)
+    await store.apply({ type: 'create-profile', name: 'After migration' })
+    expect(store.get().profiles.at(-1)?.id).toBe(40)
+  })
+
+  it('migrates an empty legacy config without resurrecting deleted IDs or profiles', async () => {
+    const path = await configPath()
+    const legacy = { schemaVersion: 1, nextProfileId: 83, activeProfileId: null, profiles: [] }
+    const original = JSON.stringify(legacy)
+    await writeFile(path, original)
+    const store = await loadProfileStore(path)
+    expect(store.get()).toEqual({
+      ...legacy,
+      schemaVersion: 2,
+      preferences: { saveOriginal: true, closeToTray: true }
+    })
+    expect(await readFile(`${path}.bak`, 'utf8')).toBe(original)
+    const created = await store.apply({ type: 'create-profile', name: 'New' })
+    expect(created.profiles[0].id).toBe(83)
+  })
+
+  it('leaves the legacy file and existing backup untouched when backup replacement fails', async () => {
+    const path = await configPath()
+    const original = JSON.stringify(legacySettings)
+    await writeFile(path, original)
+    await mkdir(`${path}.bak`)
+    await writeFile(join(`${path}.bak`, 'recovery-data'), 'preserved')
+    await expect(loadProfileStore(path)).rejects.toThrow()
+    expect(await readFile(path, 'utf8')).toBe(original)
+    expect(await readFile(join(`${path}.bak`, 'recovery-data'), 'utf8')).toBe('preserved')
+    expect((await readdir(dirname(path))).sort()).toEqual(['config.json', 'config.json.bak'])
+  })
+
+  it('retains complete v1 copies if publishing v2 fails and can migrate on a later retry', async () => {
+    const path = await configPath()
+    const original = `${JSON.stringify(legacySettings)}\n`
+    await writeFile(path, original)
+    renameFailure.target = path
+    await expect(loadProfileStore(path)).rejects.toThrow('Simulated config replacement failure')
+    expect(await readFile(path, 'utf8')).toBe(original)
+    expect(await readFile(`${path}.bak`, 'utf8')).toBe(original)
+    expect((await readdir(dirname(path))).sort()).toEqual(['config.json', 'config.json.bak'])
+    renameFailure.target = null
+    expect((await loadProfileStore(path)).get().schemaVersion).toBe(2)
+    expect(await readFile(`${path}.bak`, 'utf8')).toBe(original)
+  })
+})
+
 describe('runtime and persisted input validation', () => {
   it.each([
     null,
     { type: 'unknown' },
+    { type: 'set-preferences', saveOriginal: false },
+    { type: 'set-preferences', saveOriginal: 'false', closeToTray: true },
+    { type: 'set-preferences', saveOriginal: true, closeToTray: 0 },
+    { type: 'set-preferences', saveOriginal: true, closeToTray: false, profiles: [] },
     { type: 'create-profile', name: '   ' },
     { type: 'create-profile', name: 'x'.repeat(101) },
     { type: 'rename-profile', profileId: 1, name: 'Valid', id: 99 },
@@ -172,7 +297,7 @@ describe('runtime and persisted input validation', () => {
 
   it.each([
     '{broken json',
-    JSON.stringify({ schemaVersion: 2 }),
+    JSON.stringify({ schemaVersion: 99 }),
     JSON.stringify({ schemaVersion: 1, nextProfileId: 2, activeProfileId: 1, profiles: [] }),
     JSON.stringify({
       schemaVersion: 1,
@@ -204,6 +329,26 @@ describe('runtime and persisted input validation', () => {
     expect(await readFile(path, 'utf8')).toBe(invalid)
     expect(await readFile(`${path}.bak`, 'utf8')).toBe('untouched recovery data')
   })
+
+  it.each([
+    undefined,
+    null,
+    { saveOriginal: true },
+    { saveOriginal: 'true', closeToTray: true },
+    { saveOriginal: true, closeToTray: null },
+    { saveOriginal: true, closeToTray: true, futureOption: false }
+  ])(
+    'rejects malformed v2 preferences without replacing its config or backup: %j',
+    async (preferences) => {
+      const path = await configPath()
+      const invalid = JSON.stringify({ ...legacySettings, schemaVersion: 2, preferences })
+      await writeFile(path, invalid)
+      await writeFile(`${path}.bak`, 'preserved valid recovery copy')
+      await expect(loadProfileStore(path)).rejects.toThrow(/Cannot load profile config/)
+      expect(await readFile(path, 'utf8')).toBe(invalid)
+      expect(await readFile(`${path}.bak`, 'utf8')).toBe('preserved valid recovery copy')
+    }
+  )
 
   it('does not reset a missing config when its backup remains', async () => {
     const path = await configPath()

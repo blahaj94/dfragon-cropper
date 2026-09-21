@@ -16,6 +16,9 @@ win:
     - target: portable
       arch: [x64]
 portable:
+  # In builder 26.15.3, true uses a unique extraction folder for every launch.
+  # A shared folder cannot be replaced while its first Electron process is running.
+  unpackDirName: true
   artifactName: ${productName}-${version}-${arch}-portable.${ext}
 npmRebuild: false
 publish: null

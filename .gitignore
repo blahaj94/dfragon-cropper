@@ -4,6 +4,11 @@ out/
 dist/
 .dev-captures/
 .dev-config/
+.dev-logs/
+/captures/
+/logs/
+/config.json
+/config.json.bak
 test-results/
 playwright-report/
 coverage/

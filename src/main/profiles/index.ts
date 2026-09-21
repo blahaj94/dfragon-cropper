@@ -46,6 +46,15 @@ function name(value: unknown): string {
   return value.trim()
 }
 
+function preferences(value: unknown): ProfileSettings['preferences'] {
+  const input = object(value, 'Preferences')
+  keys(input, ['saveOriginal', 'closeToTray'])
+  if (typeof input.saveOriginal !== 'boolean' || typeof input.closeToTray !== 'boolean') {
+    throw new Error('saveOriginal and closeToTray must be booleans.')
+  }
+  return { saveOriginal: input.saveOriginal, closeToTray: input.closeToTray }
+}
+
 function rectangle(value: unknown): Omit<Region, 'id'> {
   const input = object(value, 'ROI rectangle')
   keys(input, ['x', 'y', 'width', 'height'])
@@ -67,6 +76,12 @@ function rectangle(value: unknown): Omit<Region, 'id'> {
 function command(value: unknown): ProfileCommand {
   const input = object(value, 'Profile command')
   switch (input.type) {
+    case 'set-preferences':
+      keys(input, ['type', 'saveOriginal', 'closeToTray'])
+      return {
+        type: input.type,
+        ...preferences({ saveOriginal: input.saveOriginal, closeToTray: input.closeToTray })
+      }
     case 'create-profile':
       keys(input, ['type', 'name'])
       return { type: input.type, name: name(input.name) }
@@ -108,11 +123,24 @@ function command(value: unknown): ProfileCommand {
   }
 }
 
-function parseSettings(text: string): ProfileSettings {
+function parseSettings(text: string): { settings: ProfileSettings; sourceVersion: 1 | 2 } {
   try {
     const input = object(JSON.parse(text), 'Config')
-    if (input.schemaVersion !== 1) throw new Error('Unsupported config schemaVersion; expected 1.')
-    keys(input, ['schemaVersion', 'nextProfileId', 'activeProfileId', 'profiles'])
+    if (input.schemaVersion !== 1 && input.schemaVersion !== 2) {
+      throw new Error('Unsupported config schemaVersion; expected 1 or 2.')
+    }
+    const sourceVersion = input.schemaVersion
+    keys(input, [
+      'schemaVersion',
+      'nextProfileId',
+      'activeProfileId',
+      'profiles',
+      ...(sourceVersion === 2 ? ['preferences'] : [])
+    ])
+    const savedPreferences =
+      sourceVersion === 1
+        ? { saveOriginal: true, closeToTray: true }
+        : preferences(input.preferences)
     const nextProfileId = integer(input.nextProfileId, 'Next profile ID')
     if (!Array.isArray(input.profiles)) throw new Error('Profiles must be an array.')
     const profileIds = new Set<number>()
@@ -140,7 +168,9 @@ function parseSettings(text: string): ProfileSettings {
           ...rectangle({ x: region.x, y: region.y, width: region.width, height: region.height })
         }
       })
-      return { id, name: name(profile.name), nextRegionId, regions }
+      // Validate without rewriting a persisted name during migration or a later read.
+      name(profile.name)
+      return { id, name: profile.name as string, nextRegionId, regions }
     })
     const activeProfileId =
       input.activeProfileId === null ? null : integer(input.activeProfileId, 'Active profile ID')
@@ -152,7 +182,16 @@ function parseSettings(text: string): ProfileSettings {
         'Active profile must reference an existing profile, or be null when no profiles remain.'
       )
     }
-    return { schemaVersion: 1, nextProfileId, activeProfileId, profiles }
+    return {
+      sourceVersion,
+      settings: {
+        schemaVersion: 2,
+        nextProfileId,
+        activeProfileId,
+        profiles,
+        preferences: savedPreferences
+      }
+    }
   } catch (error) {
     throw new Error(
       `Cannot load profile config: ${error instanceof Error ? error.message : String(error)}`,
@@ -163,9 +202,10 @@ function parseSettings(text: string): ProfileSettings {
 
 function defaults(): ProfileSettings {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     nextProfileId: 2,
     activeProfileId: 1,
+    preferences: { saveOriginal: true, closeToTray: true },
     profiles: [
       {
         id: 1,
@@ -181,6 +221,10 @@ function defaults(): ProfileSettings {
 }
 
 function applyCommand(settings: ProfileSettings, request: ProfileCommand): void {
+  if (request.type === 'set-preferences') {
+    settings.preferences = { saveOriginal: request.saveOriginal, closeToTray: request.closeToTray }
+    return
+  }
   if (request.type === 'create-profile') {
     if (settings.nextProfileId === Number.MAX_SAFE_INTEGER)
       throw new Error('Profile ID limit reached.')
@@ -245,6 +289,25 @@ function missing(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'ENOENT'
 }
 
+async function requireUnchangedFile(path: string, storedText: string): Promise<string> {
+  let previousText: string
+  try {
+    previousText = await readFile(path, 'utf8')
+    parseSettings(previousText)
+  } catch (error) {
+    throw new ProfileFileConflictError(
+      `Profile config can no longer be read safely. ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error }
+    )
+  }
+  if (previousText !== storedText) {
+    throw new ProfileFileConflictError(
+      'Profile config changed outside this app. Reload it before editing; no files were overwritten.'
+    )
+  }
+  return previousText
+}
+
 export async function loadProfileStore(configPath: string): Promise<ProfileStore> {
   const path = resolve(configPath)
   const backupPath = `${path}.bak`
@@ -271,7 +334,16 @@ export async function loadProfileStore(configPath: string): Promise<ProfileStore
     await mkdir(dirname(path), { recursive: true })
     await atomicWrite(path, storedText)
   }
-  current = parseSettings(storedText)
+  const parsed = parseSettings(storedText)
+  current = parsed.settings
+  if (parsed.sourceVersion === 1) {
+    // Only a fully validated v1 file is migrated; preserve its exact original bytes first.
+    const original = await requireUnchangedFile(path, storedText)
+    const migrated = `${JSON.stringify(current, null, 2)}\n`
+    await atomicWrite(backupPath, original)
+    await atomicWrite(path, migrated)
+    storedText = migrated
+  }
   let pending: Promise<unknown> = Promise.resolve()
   return {
     get: () => structuredClone(current),
@@ -281,21 +353,7 @@ export async function loadProfileStore(configPath: string): Promise<ProfileStore
       const operation = pending.then(async () => {
         const next = structuredClone(current)
         applyCommand(next, request)
-        let previousText: string
-        try {
-          previousText = await readFile(path, 'utf8')
-          parseSettings(previousText)
-        } catch (error) {
-          throw new ProfileFileConflictError(
-            `Profile config can no longer be read safely. ${error instanceof Error ? error.message : String(error)}`,
-            { cause: error }
-          )
-        }
-        if (previousText !== storedText) {
-          throw new ProfileFileConflictError(
-            'Profile config changed outside this app. Reload it before editing; no files were overwritten.'
-          )
-        }
+        const previousText = await requireUnchangedFile(path, storedText)
         const nextText = `${JSON.stringify(next, null, 2)}\n`
         // The backup remains a complete last-known-good config even if the next write fails.
         await atomicWrite(backupPath, previousText)

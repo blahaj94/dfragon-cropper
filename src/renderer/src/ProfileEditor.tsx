@@ -1,5 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import type { ProfileCommand, ProfileSettings, Region, SpikeState } from '../../shared/contracts'
+import { ScreenPreview } from './ScreenPreview'
+import { userError } from './errors'
 
 type Rectangle = Omit<Region, 'id'>
 type RectangleDraft = Record<keyof Rectangle, string>
@@ -13,11 +15,6 @@ const draftFrom = (region: Rectangle): RectangleDraft => ({
   width: String(region.width),
   height: String(region.height)
 })
-
-export function userError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error)
-  return message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '')
-}
 
 function rectangleFrom(draft: RectangleDraft): Rectangle {
   const rectangle = Object.fromEntries(
@@ -65,12 +62,16 @@ export function ProfileEditor({
   settings,
   settingsError,
   onCommand,
-  onSavingChange
+  onSavingChange,
+  previewDisabled,
+  onPreviewBusyChange
 }: {
   settings: ProfileSettings | null
   settingsError: string | null
   onCommand: (command: ProfileCommand) => Promise<SpikeState>
   onSavingChange: (saving: boolean) => void
+  previewDisabled: boolean
+  onPreviewBusyChange: (busy: boolean) => void
 }) {
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [newName, setNewName] = useState('')
@@ -106,8 +107,10 @@ export function ProfileEditor({
       const next = await onCommand(typeof command === 'function' ? command() : command)
       onSaved?.(next)
       setNotice(message)
+      return true
     } catch (reason) {
       setError(`Changes were not saved. ${userError(reason)}`)
+      return false
     } finally {
       setSaving(false)
       onSavingChange(false)
@@ -268,6 +271,19 @@ export function ProfileEditor({
                 </button>
               </div>
 
+              <ScreenPreview
+                profileId={selected.id}
+                profileName={selected.name}
+                regions={selected.regions}
+                disabled={previewDisabled || saving}
+                onBusyChange={onPreviewBusyChange}
+                onAdd={(rectangle) =>
+                  save(
+                    { type: 'add-region', profileId: selected.id, rectangle },
+                    'Drawn ROI saved.'
+                  )
+                }
+              />
               <h3>Regions of interest</h3>
               {selected.regions.length === 0 && <p>No saved ROIs in this profile.</p>}
               {selected.regions.map((region) => {
