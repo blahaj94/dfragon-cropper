@@ -17,7 +17,7 @@ Portable 앱의 설정·캡처·로그는 임시 extraction 폴더가 아닌 실
 
 ## 설정 형식과 저장
 
-`config.json`은 `schemaVersion: 2` JSON입니다. 프로필·ROI·활성 프로필·ID 증가 카운터와 `preferences.saveOriginal`, `preferences.closeToTray`를 저장합니다. 두 옵션은 정확한 boolean 값이어야 하며 기본값은 모두 `true`입니다.
+`config.json`은 `schemaVersion: 3` JSON입니다. 프로필·ROI·활성 프로필·ID 증가 카운터와 `preferences.saveOriginal`, `preferences.closeToTray`를 저장합니다. 두 옵션은 정확한 boolean 값이어야 하며 기본값은 모두 `true`입니다.
 
 프로필과 ROI ID는 변경하거나 삭제 후 재사용하지 않습니다. 좌표는 Primary Monitor의 물리 픽셀을 나타내는 안전한 정수로, `x/y >= 0`, `width/height > 0`이어야 합니다. 이름·좌표·명령·설정 데이터는 main에서 검증합니다.
 
@@ -25,11 +25,28 @@ Portable 앱의 설정·캡처·로그는 임시 extraction 폴더가 아닌 실
 
 앱은 같은 사용자 데이터 폴더에서 중복 인스턴스를 막고 저장 직전 외부 변경을 검사합니다. 외부 편집기 등 다른 프로그램과의 동시 쓰기를 막는 범용 파일 잠금이나 원자적 compare-and-swap을 제공하지는 않습니다. 설정 파일을 직접 교체하거나 편집하려면 먼저 `Quit`로 앱을 완전히 종료하세요.
 
-### v1 설정 이관
+### 단축키 저장 형식
 
-완전히 유효한 v1 설정만 자동으로 v2로 이관합니다. 기존 프로필·이름·ID·증가 카운터·활성 선택은 유지하고 두 새 옵션을 켭니다.
+최상위 `shortcuts`에는 캡처용 `capture`와 ROI 선택용 `selectRoi`를 저장합니다. 기본값은 다음과 같습니다.
 
-이관 전에 정확한 v1 원문을 `config.json.bak`에 보존한 뒤 v2 파일을 원자적으로 교체합니다. 이관에 실패하면 성공한 설정을 메모리에 게시하거나 잘못된 원본을 덮어쓰지 않습니다. v2 파일을 다시 여는 것만으로 백업을 교체하지 않으며, 이후 정상 저장부터 직전 유효 v2 설정으로 백업을 갱신합니다.
+```json
+{
+  "shortcuts": {
+    "capture": { "key": "PrintScreen", "ctrl": false, "alt": false, "shift": false, "meta": false },
+    "selectRoi": { "key": "F12", "ctrl": false, "alt": false, "shift": false, "meta": false }
+  }
+}
+```
+
+`key`는 `F1`~`F24`, `PrintScreen`, `Pause`, `ScrollLock`, `KeyA`~`KeyZ`, `Digit0`~`Digit9` 중 하나입니다. 네 modifier 필드는 정확한 boolean이며 `meta`는 Windows 키입니다. 두 동작에 같은 조합을 지정할 수 없습니다. 문자·숫자는 Ctrl/Alt/Win 중 하나가 필요하고, PrintScreen은 캡처에만 사용할 수 있습니다. Alt+F4와 Win+L은 거부합니다. Ctrl이 포함된 Pause·ScrollLock 조합은 Windows에서 다른 키 코드가 되므로 거부합니다. 실제 변경은 파일 직접 편집보다 [Settings의 단축키 설정](user-guide.md#단축키-바꾸기)을 사용하세요.
+
+### 이전 설정 이관
+
+완전히 유효한 v1·v2 설정만 자동으로 v3로 이관합니다. 기존 프로필·이름·ID·증가 카운터·활성 선택을 유지하고 기본 단축키를 추가합니다. v2의 두 preferences 값도 유지하며, 이 옵션이 없던 v1은 둘 다 켭니다.
+
+이관 전에 정확한 기존 원문을 `config.json.bak`에 보존한 뒤 v3 파일을 원자적으로 교체합니다. 이관에 실패하면 성공한 설정을 메모리에 게시하거나 잘못된 원본을 덮어쓰지 않습니다. v3 파일을 다시 여는 것만으로 백업을 교체하지 않으며, 이후 정상 저장부터 직전 유효 설정으로 백업을 갱신합니다.
+
+0.5.0 이하 버전은 v3 설정을 읽지 못합니다. 이전 버전으로 돌아갈 때는 앱을 **Quit**로 종료하고 현재 파일을 별도로 보존한 뒤, 이전 버전이 읽을 수 있는 설정 사본을 `config.json`으로 복사하세요. 백업은 이후 저장으로 바뀔 수 있으므로 이관 직전 설정을 따로 보관하면 복원이 쉽습니다. 버전 숫자만 고쳐서 사용하지 마세요.
 
 ## 오류가 발생했을 때
 

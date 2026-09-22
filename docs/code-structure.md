@@ -14,7 +14,7 @@ flowchart TB
     Bridge["Preload<br/>허용된 API만 노출"]
 
     subgraph Main["Electron Main 프로세스"]
-        Hook["PrintScreen 감지<br/>Win32 pass-through hook"]
+        Hook["저장된 단축키 감지<br/>Win32 keyboard hook"]
         App["캡처 조율 · 프로필 · 이력<br/>트레이 · 단일 인스턴스"]
         Frame["Win32 GDI / Koffi<br/>주 모니터 한 프레임"]
         Crop["ROI 픽셀 행 복사<br/>Lossless PNG 인코딩"]
@@ -50,6 +50,7 @@ flowchart TB
 | `ipc.ts`, `window-security.ts`                      | 명시적인 요청 연결, 공통 창 보안과 발신자 검사                              |
 | `operations.ts`                                     | 시작된 비동기 작업 추적과 종료 전 대기                                      |
 | `main-window.ts`, `tray.ts`, `capture-shortcuts.ts` | Electron 창·트레이·키 등록을 앱의 동작과 연결                               |
+| `printscreen.ts`, `shortcuts/`                      | native 키 전달, 정확한 조합 비교와 키 down/up 수명                          |
 | `capture/controller.ts`                             | 캡처 가능 조건, 저장된 프로필·옵션 전달, 성공·실패 상태 반영                |
 | `capture/index.ts`                                  | 한 프레임을 한 이벤트로 저장하는 트랜잭션. metadata 마지막 기록과 실패 정리 |
 | `capture/pixels.ts`, `win32.ts`, `filenames.ts`     | 픽셀 처리, native 자원 수명, 저장 파일명 계약을 각각 담당                   |
@@ -68,12 +69,15 @@ flowchart TB
 화면 컴포넌트는 배치와 사용자 동작 연결에 집중합니다. `useCaptureApp`과 `useCaptureHistory`는 IPC 구독과 비동기 결과의 수명을 관리합니다.
 
 - `profile-editor/`: 문자열 좌표 변환·검증, 편집 초안/명령, 반복되는 좌표 입력과 ROI 폼. 저장 전 초안은 캡처 설정과 분리합니다.
-- `roi-selector/`: F12 요청 시 프로필·ROI 대상을 고정하고, 프로필별 완료한 선택을 유지합니다.
+- `roi-selector/`: 저장된 ROI 단축키 요청 시 프로필·ROI 대상을 고정하고, 프로필별 완료한 선택을 유지합니다.
 - `roi-overlay/`: 선택창 IPC 세션, pointer capture와 드래그 좌표, 같은 원본을 표시하는 확대경을 각각 담당합니다.
 - `ground-truth/`: 연속 캡처 목록·목차, 이미지별 입력 초안과 저장, 필터·Enter 이동, 화면 근처의 이미지 로딩을 각각 담당합니다. 정답 상태는 프로필이나 캡처 진행 상태에 넣지 않습니다.
+- `settings/`: 단축키 편집 초안·검증 메시지와 명시적 저장. 프로필 초안이나 native 훅 상태를 소유하지 않습니다.
 - `selection.ts`: 표시 좌표를 원본 픽셀 좌표로 바꾸는 기존 순수 함수입니다. 확대경이나 표시 배율은 저장 PNG를 변경하지 않습니다.
 
 ## 공통화와 유지 기준
+
+`shared/shortcuts.ts`는 main과 renderer가 함께 사용하는 단축키 형식·검증·표시를 담당합니다. main에서도 같은 검증을 실행하며 renderer 검증만 신뢰하지 않습니다.
 
 실제로 같은 계약을 공유하는 창 보안, ROI 파일명, 숫자 좌표 필드와 초안 변환만 재사용합니다. 프로필 검증과 이력 파일 검증처럼 허용 데이터·오류 의미가 다른 함수는 모양이 비슷해도 합치지 않습니다. 범용 이벤트 버스·저장소 프레임워크·전역 `utils` 계층은 추가하지 않습니다.
 
@@ -85,6 +89,6 @@ flowchart TB
 
 기존 픽셀·파일·설정 테스트와 Electron UI 흐름을 유지합니다. 분리한 IPC 발신자 검사, 종료 시 저장 대기, 배포판의 개발 옵션 차단, 설정 오류 분류와 복수 이력 루트에는 의미 있는 경계 검사를 추가합니다. 구조 검사에서는 생산 코드가 테스트 프레임워크를 참조하지 않는지와 진입점에 도메인 처리가 다시 섞이지 않는지도 확인합니다.
 
-Windows CI는 빌드와 합성 화면의 UI 검사입니다. 이 구조 정리로 실제 Windows 10의 native 키·캡처·DPI를 새로 검증했다고 주장하지 않습니다. 새 F12 기능의 남은 실기 범위는 [선택창 검증 기록](roi-overlay-verification.md)을 참조하세요.
+Windows CI는 빌드·합성 화면 UI와 `SendInput` native 단축키 fixture를 실행하도록 구성합니다. 통과 여부는 해당 실행 보고서로 확인하며, Windows 10의 물리 키·캡처·DPI를 새로 검증했다고 주장하지 않습니다. 전체화면 ROI 선택의 남은 실기 범위는 [선택창 검증 기록](roi-overlay-verification.md)을 참조하세요.
 
 정답 작성은 기존 저장 PNG를 읽고 metadata의 정답 영역만 수정합니다. 원래 JSON 필드와 이미지 바이트 보존, 저장 실패·외부 변경, 과거 페이지 접근은 파일 기반 단위 테스트로 검사합니다. 필터·목차·Enter·비동기 응답과 초안 보존은 격리된 합성 캡처를 사용하는 Electron UI로 확인하며 native 캡처의 새로운 실기 근거로 취급하지 않습니다.

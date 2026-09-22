@@ -1,0 +1,45 @@
+.shortcut-preferences {
+  margin-top: 28px;
+  padding-top: 16px;
+  border-top: 1px solid #d4dee5;
+}
+
+.shortcut-bindings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.shortcut-binding {
+  min-width: 0;
+  margin: 0;
+  padding: 16px;
+  border: 1px solid #c8d1da;
+  border-radius: 8px;
+}
+
+.shortcut-binding legend {
+  font-weight: 650;
+}
+
+.shortcut-modifiers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.shortcut-modifiers .checkbox {
+  margin-top: 12px;
+}
+
+.shortcut-binding output {
+  font-weight: 650;
+  color: #12647a;
+}
+
+@media (max-width: 640px) {
+  .shortcut-bindings {
+    grid-template-columns: 1fr;
+  }
+}

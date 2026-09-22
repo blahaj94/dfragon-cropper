@@ -1,6 +1,6 @@
 {
   "name": "dfragon-cropper",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "description": "Windows primary monitor capture with saved physical pixel ROI profiles",
   "main": "out/main/index.js",

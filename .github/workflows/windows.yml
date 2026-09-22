@@ -83,6 +83,18 @@ jobs:
         id: ui
         run: npm run test:ui
 
+      # Real native hook/SendInput on this Windows Server runner, not physical-key/Windows 10 evidence.
+      - name: Test native shortcut bindings with synthetic keyboard input
+        timeout-minutes: 2
+        run: |
+          $report = Join-Path $env:RUNNER_TEMP 'dfragon-shortcut-bindings.json'
+          try {
+            node spike/windows-capture/shortcut-bindings-probe.cjs --output $report
+            if ($LASTEXITCODE -ne 0) { throw 'Native synthetic shortcut probe failed.' }
+          } finally {
+            if (Test-Path -LiteralPath $report) { Get-Content -LiteralPath $report -Raw }
+          }
+
       - name: Retain failed synthetic UI diagnostics
         if: failure() && steps.ui.outcome == 'failure'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

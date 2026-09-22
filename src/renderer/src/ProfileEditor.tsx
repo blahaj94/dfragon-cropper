@@ -2,24 +2,28 @@ import { ScreenPreview } from './ScreenPreview'
 import { RectangleFields } from './profile-editor/RectangleFields'
 import { RegionEditor } from './profile-editor/RegionEditor'
 import { useProfileEditor, type ProfileEditorInputs } from './profile-editor/useProfileEditor'
+import { defaultShortcuts, formatShortcut } from '../../shared/shortcuts'
 
 export function ProfileEditor(
   props: ProfileEditorInputs & {
     previewDisabled: boolean
+    settingsSaving: boolean
     selectionShortcutStatus: string
   }
 ) {
-  const { settings, settingsError, previewDisabled, selectionShortcutStatus } = props
+  const { settings, settingsError, previewDisabled, selectionShortcutStatus, settingsSaving } =
+    props
   const editor = useProfileEditor(props)
   const { selected } = editor
+  const shortcuts = settings?.shortcuts ?? defaultShortcuts()
 
   return (
     <section aria-labelledby="profile-editor-heading" className="profile-editor">
       <h2 id="profile-editor-heading">Profile Editor</h2>
       <p>Coordinates are whole physical pixels from the primary monitor’s top-left corner.</p>
       <p>
-        Save name and ROI edits to apply them. Capture Now and PrintScreen use the saved active
-        profile.
+        Save name and ROI edits to apply them. Capture Now and {formatShortcut(shortcuts.capture)}{' '}
+        use the saved active profile.
       </p>
       {!settings && !settingsError && <p>Loading profiles…</p>}
       {editor.error && !settingsError && <p role="alert">{editor.error}</p>}
@@ -27,7 +31,7 @@ export function ProfileEditor(
       {settings && (
         <fieldset
           className="editor-controls"
-          disabled={editor.saving || editor.selecting || !!settingsError}
+          disabled={editor.saving || editor.selecting || settingsSaving || !!settingsError}
         >
           <legend className="visually-hidden">Profile settings</legend>
           <form
@@ -114,6 +118,7 @@ export function ProfileEditor(
                 drafts={editor.previewDrafts}
                 disabled={previewDisabled || editor.saving || !!settingsError}
                 shortcutStatus={selectionShortcutStatus}
+                shortcutLabel={formatShortcut(shortcuts.selectRoi)}
                 isTargetAvailable={editor.isTargetAvailable}
                 onBusyChange={editor.selectionBusyChanged}
                 onSelectionComplete={editor.selectionCompleted}

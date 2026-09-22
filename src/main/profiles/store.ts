@@ -86,8 +86,8 @@ export async function loadProfileStore(configPath: string): Promise<ProfileStore
   }
   const parsed = parseSettings(storedText)
   current = parsed.settings
-  if (parsed.sourceVersion === 1) {
-    // Only a fully validated v1 file is migrated; preserve its exact original bytes first.
+  if (parsed.sourceVersion < 3) {
+    // Only a fully validated legacy file is migrated; preserve its exact original bytes first.
     const original = await requireUnchangedFile(path, storedText)
     const migrated = `${JSON.stringify(current, null, 2)}\n`
     await atomicWrite(backupPath, original)

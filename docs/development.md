@@ -2,7 +2,7 @@
 
 [제품 소개](../README.md) · [문서 목록](README.md)
 
-DFragonCropper는 main/preload/renderer를 분리한 단일 Electron 패키지입니다. 현재 버전은 0.5.0이며, 로컬 Windows MVP를 개발하고 검증하는 절차를 이 문서에 정리합니다.
+DFragonCropper는 main/preload/renderer를 분리한 단일 Electron 패키지입니다. 현재 버전은 0.6.0이며, 로컬 Windows MVP를 개발하고 검증하는 절차를 이 문서에 정리합니다.
 
 ## 실행 환경
 
@@ -39,7 +39,7 @@ Windows x64 PC에서 `npm ci`를 실행한 뒤 빌드합니다. macOS에서 설�
 npm run build:win
 ```
 
-결과는 `dist/DFragonCropper-0.5.0-x64-portable.exe`입니다. 현재 개발 빌드는 코드서명된 안정 릴리스가 아닙니다. 앱은 임시 extraction 폴더 대신 실행 EXE 옆에 설정·캡처·로그를 저장하므로, EXE가 있는 폴더에 쓰기 권한이 필요합니다.
+결과는 `dist/DFragonCropper-0.6.0-x64-portable.exe`입니다. 현재 개발 빌드는 코드서명된 안정 릴리스가 아닙니다. 앱은 임시 extraction 폴더 대신 실행 EXE 옆에 설정·캡처·로그를 저장하므로, EXE가 있는 폴더에 쓰기 권한이 필요합니다.
 
 `electron-builder` 26.15.3의 `portable.unpackDirName: true`를 유지합니다. 각 실행이 별도 임시 폴더를 사용해야 두 번째 실행이 첫 실행의 파일을 교체하려 하지 않고 Electron의 단일 인스턴스 처리까지 도달합니다.
 
@@ -68,7 +68,8 @@ src/main/runtime.ts        개발/portable 실행 설정과 경로
 src/main/operations.ts     진행 중 작업 추적과 종료 전 대기
 src/main/capture-shortcuts.ts 키 감지 설치 결과와 앱 상태 연결
 src/main/tray.ts           트레이 메뉴와 이벤트 연결
-src/main/printscreen.ts    Win32 pass-through 키보드 훅
+src/main/printscreen.ts    Win32 키보드 훅: 캡처 전달·ROI 선택 키 처리
+src/main/shortcuts/       정확한 조합·키 반복/해제 상태와 focused 입력 변환
 src/main/roi-selection.ts  별도 전체화면 ROI 선택창과 제한된 IPC
 src/main/roi-selection-controller.ts 화면 캡처·선택창·편집창 복원 흐름
 src/main/capture/          캡처 조건·GDI·픽셀·이벤트 저장·이력별 모듈
@@ -78,6 +79,7 @@ src/main/logging.ts        로컬 진단 로그와 한 세대 회전
 src/preload/              한정된 typed API
 src/shared/               프로필과 typed IPC 계약
 src/shared/ground-truth.ts 정답 작성 API, 문자열/null 형식과 입력 한도
+src/shared/shortcuts.ts    저장 형식, 기본 단축키·검증·표시와 Windows VK 매핑
 src/renderer/             숫자·드래그 ROI 편집, 캡처 기록과 설정 화면
 tests/unit/               좌표·픽셀·프로필·설정·이력 계약 테스트
 tests/ui/                 Playwright Electron 편집·캡처 테스트
@@ -95,9 +97,18 @@ Renderer는 `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`�
 
 캡처는 저장된 활성 프로필과 원본 저장 옵션을 고정한 뒤 Primary Monitor에서 한 프레임만 가져옵니다. 모든 ROI는 그 프레임의 정확한 행 바이트를 복사해 생성합니다. 확대·축소, 필터, 정규화, JPEG 인코딩은 하지 않습니다. 미리보기의 표시 크기 변경은 실제 PNG의 크기나 픽셀을 바꾸지 않습니다.
 
-PrintScreen의 native callback은 즉시 입력을 다음 hook으로 전달하고, 캡처와 파일 저장은 callback 바깥에서 처리합니다. 저장 중 들어온 추가 입력은 대기열에 쌓지 않고 skipped로 집계합니다. 캡처 구현을 교체할 때는 기존 비교 실험을 보존하고 변경 근거를 기록해야 합니다.
+캡처 단축키의 native callback은 즉시 입력을 다음 hook으로 전달하고, 캡처와 파일 저장은 callback 바깥에서 처리합니다. 저장 중 들어온 추가 입력은 대기열에 쌓지 않고 skipped로 집계합니다. 캡처 구현을 교체할 때는 기존 비교 실험을 보존하고 변경 근거를 기록해야 합니다.
 
-F12 선택 요청은 같은 listener의 별도 콜백으로 처리합니다. Windows는 F12를 `RegisterHotKey`용으로 예약하므로 해당 방식으로 등록하지 않습니다([Microsoft 문서](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey)). 선택 기능이 켜져 있으면 F12만 처리하고, PrintScreen과 다른 키는 계속 전달합니다. 콜백에서 캡처하거나 파일을 쓰지 않습니다.
+ROI 선택 요청은 같은 listener의 별도 콜백으로 처리합니다. 기본키는 F12이며, 저장된 설정을 매 입력에서 읽어 훅 재등록 없이 단축키를 바꿉니다. Windows는 F12를 `RegisterHotKey`용으로 예약하므로 해당 방식으로 등록하지 않습니다([Microsoft 문서](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerhotkey)). 선택 조합의 마지막 키 down/up만 소비하고 PrintScreen·캡처·기타 입력은 전달합니다. 반복 입력이나 누른 도중 modifier·설정 변경으로 추가 동작을 만들지 않도록 물리 키 쌍을 추적합니다. 콜백에서 캡처하거나 파일을 쓰지 않습니다.
+
+단축키 저장·기존 설정 이관과 실패 처리는 파일 기반 단위 테스트, 설정 UI·재시작·focused 입력은 Electron 합성 UI 테스트로 검사합니다. Windows native 배선은 아래 fixture가 별도 foreground 프로세스에 `SendInput`으로 합성 입력을 보내 확인합니다. 결과 보고서의 실행 환경과 각 phase 성공 여부를 확인해야 하며, fixture 추가 자체는 통과 근거가 아닙니다.
+
+```powershell
+npm run build
+node spike/windows-capture/shortcut-bindings-probe.cjs --output .dev-captures/verification/shortcut-bindings.json
+```
+
+이 검사는 Windows 대화형 데스크톱이 필요하며 Windows Server CI의 합성 입력 결과를 Windows 10의 물리 키보드·DPI 검증으로 해석하지 않습니다.
 
 선택창은 주 모니터를 캡처한 뒤 표시하고, 원본 이미지의 좌표로만 결과를 반환합니다. 전용 preload는 원본 조회와 선택 완료 메서드만 노출합니다. Main은 발신 창·프레임·URL·세션과 좌표를 확인합니다. 선택 중 앱 캡처와 설정 쓰기를 차단하며, 취소·화면 변경·창 오류·앱 종료는 대기 중인 선택을 해제합니다. 구현 검증 범위와 Windows 실기 미완료 항목은 [0.4.0 선택창 검증](roi-overlay-verification.md)에 정리했습니다.
 

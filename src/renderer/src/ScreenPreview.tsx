@@ -5,11 +5,21 @@ export function ScreenPreview(
   props: RoiSelectorInputs & {
     profileName: string
     shortcutStatus: string
+    shortcutLabel: string
     onSave: (regionId: number) => Promise<boolean>
     onDiscard: (regionId: number) => void
   }
 ) {
-  const { profileId, profileName, regions, disabled, shortcutStatus, onSave, onDiscard } = props
+  const {
+    profileId,
+    profileName,
+    regions,
+    disabled,
+    shortcutStatus,
+    shortcutLabel,
+    onSave,
+    onDiscard
+  } = props
   const selector = useRoiSelector(props)
   const { target, regionId, draft, replacement, rectangle, loading, error, select } = selector
 
@@ -18,10 +28,13 @@ export function ScreenPreview(
       <div className="section-heading">
         <div>
           <h3 id="screen-preview-heading">Select an area on the primary screen</h3>
-          <p>Press F12 or select below, then drag on the frozen screen. Press Esc to cancel.</p>
+          <p>
+            Press {shortcutLabel} or select below, then drag on the frozen screen. Press Esc to
+            cancel.
+          </p>
         </div>
         <button type="button" disabled={disabled || loading} onClick={() => void select()}>
-          {loading ? 'Selecting ROI…' : 'Select ROI (F12)'}
+          {loading ? 'Selecting ROI…' : `Select ROI (${shortcutLabel})`}
         </button>
       </div>
       <p className="selection-shortcut-status">{shortcutStatus}</p>

@@ -1,4 +1,7 @@
 import type { GroundTruthApi } from './ground-truth'
+import type { ShortcutSettings } from './shortcuts'
+
+export type { KeyBinding, ShortcutKey, ShortcutSettings } from './shortcuts'
 
 export { GROUND_TRUTH_TEXT_LIMIT } from './ground-truth'
 export type {
@@ -25,15 +28,17 @@ export interface Profile {
 }
 
 export interface ProfileSettings {
-  schemaVersion: 2
+  schemaVersion: 3
   nextProfileId: number
   activeProfileId: number | null
   profiles: Profile[]
   preferences: { saveOriginal: boolean; closeToTray: boolean }
+  shortcuts: ShortcutSettings
 }
 
 export type ProfileCommand =
   | { type: 'set-preferences'; saveOriginal: boolean; closeToTray: boolean }
+  | { type: 'set-shortcuts'; shortcuts: ShortcutSettings }
   | { type: 'create-profile'; name: string }
   | { type: 'rename-profile'; profileId: number; name: string }
   | { type: 'delete-profile'; profileId: number }

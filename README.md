@@ -6,11 +6,12 @@
 
 **화면에서 필요한 영역만 모으고, 이미지 옆에 캐릭터 닉네임을 적으세요.**
 
-Windows 10 x64 · 설치 없이 실행 · 0.5.0 미리보기
+Windows 10 x64 · 설치 없이 실행 · 0.6.0 미리보기
 
-[**Windows 다운로드**](https://github.com/blahaj94/dfragon-cropper/releases/download/v0.5.0/DFragonCropper-0.5.0-x64-portable.exe) · [릴리스 노트](https://github.com/blahaj94/dfragon-cropper/releases/tag/v0.5.0)
+[**Windows 다운로드**](https://github.com/blahaj94/dfragon-cropper/releases/download/v0.6.0/DFragonCropper-0.6.0-x64-portable.exe) · [릴리스 노트](https://github.com/blahaj94/dfragon-cropper/releases/tag/v0.6.0)
 
 받은 EXE를 쓰기 가능한 폴더에 두고 실행하세요.
+기본 단축키 **F12 / PrintScreen**은 `Settings` → `Keyboard shortcuts`에서 바꿀 수 있습니다.
 
 실제 앱 화면입니다. 예시 이미지를 사용해 macOS 개발 환경에서 촬영했습니다.
 

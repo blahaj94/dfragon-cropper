@@ -4,6 +4,7 @@ import { CaptureHistory } from './CaptureHistory'
 import { Preferences } from './Preferences'
 import { useCaptureApp } from './useCaptureApp'
 import { GroundTruth } from './ground-truth/GroundTruth'
+import { defaultShortcuts, formatShortcut } from '../../shared/shortcuts'
 
 export function App() {
   const { state, requestError, capture, updateProfiles, hideToTray, quit, openOutputFolder } =
@@ -44,7 +45,11 @@ export function App() {
       </header>
 
       {state?.mode === 'unsupported' && (
-        <p role="note">Screen capture and PrintScreen detection require Windows 10.</p>
+        <p role="note">
+          Screen capture and{' '}
+          {formatShortcut((state.settings?.shortcuts ?? defaultShortcuts()).capture)} detection
+          require Windows 10.
+        </p>
       )}
       {state?.mode === 'fixture' && <p role="note">Fixture mode: synthetic test frame.</p>}
 
@@ -143,8 +148,9 @@ export function App() {
           onCommand={updateProfiles}
           onSavingChange={setProfileSaving}
           previewDisabled={!state || state.busy || profileSaving || state.mode === 'unsupported'}
+          settingsSaving={profileSaving}
           onPreviewBusyChange={setPreviewing}
-          selectionShortcutStatus={state?.selectionShortcutStatus ?? 'Loading F12 status…'}
+          selectionShortcutStatus={state?.selectionShortcutStatus ?? 'Loading shortcut status…'}
           onSelectionComplete={() => setTab('Profiles')}
         />
 
@@ -204,7 +210,7 @@ export function App() {
       >
         <Preferences
           settings={state?.settings ?? null}
-          blocked={!!state?.settingsError || previewing}
+          blocked={!!state?.settingsError || previewing || profileSaving || !!state?.busy}
           outputDirectory={state?.outputDirectory ?? ''}
           backgroundAvailable={state?.backgroundAvailable ?? false}
           onCommand={updateProfiles}

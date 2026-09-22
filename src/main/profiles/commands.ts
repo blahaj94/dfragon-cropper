@@ -1,11 +1,13 @@
 import type { ProfileCommand, ProfileSettings } from '../../shared/contracts'
+import { defaultShortcuts } from '../../shared/shortcuts'
 
 export function defaultSettings(): ProfileSettings {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     nextProfileId: 2,
     activeProfileId: 1,
     preferences: { saveOriginal: true, closeToTray: true },
+    shortcuts: defaultShortcuts(),
     profiles: [
       {
         id: 1,
@@ -21,6 +23,10 @@ export function defaultSettings(): ProfileSettings {
 }
 
 export function applyProfileCommand(settings: ProfileSettings, request: ProfileCommand): void {
+  if (request.type === 'set-shortcuts') {
+    settings.shortcuts = structuredClone(request.shortcuts)
+    return
+  }
   if (request.type === 'set-preferences') {
     settings.preferences = { saveOriginal: request.saveOriginal, closeToTray: request.closeToTray }
     return

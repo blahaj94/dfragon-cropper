@@ -11,15 +11,17 @@ Windows x64에서 EXE를 쓰기 가능한 폴더에 두고 실행하세요. 설�
 각 릴리스에는 `SHA256SUMS.txt`도 포함됩니다. 다운로드한 EXE의 SHA-256을 PowerShell로 계산해 해당 파일의 값과 비교할 수 있습니다.
 
 ```powershell
-Get-FileHash .\DFragonCropper-0.5.0-x64-portable.exe -Algorithm SHA256
+Get-FileHash .\DFragonCropper-0.6.0-x64-portable.exe -Algorithm SHA256
 ```
 
 ## 새 버전으로 업데이트
 
 1. 앱이나 트레이 메뉴에서 **Quit**를 눌러 완전히 종료합니다.
 2. 기존 `config.json`, `config.json.bak`, `captures/`를 보존한 채 새 EXE를 **같은 폴더**에 둡니다. 이전 버전의 `.dev-captures/`가 있다면 함께 보존합니다. 새 EXE를 다른 폴더에서 실행하면 그 폴더에 별도의 설정과 캡처를 사용합니다.
-3. 새 EXE를 실행해 활성 프로필과 저장된 ROI를 확인합니다. 0.3.x·0.4.0에서 0.5.0으로는 설정 형식이 바뀌지 않습니다. `Ground Truth`에서 이전 캡처도 정답을 작성할 수 있습니다.
+3. 새 EXE를 실행해 활성 프로필·ROI와 단축키를 확인합니다. 0.6.0은 유효한 v1·v2 설정을 v3로 이관하며, 기존 프로필·옵션을 유지하고 PrintScreen/F12 기본 단축키를 추가합니다. 이관 전 설정은 `config.json.bak`에 보존합니다.
 4. 새 버전이 정상 동작하면 이전 버전의 EXE를 별도로 보관하거나 삭제할 수 있습니다. 설정·캡처 파일을 함께 지우지 마세요.
+
+0.5.0 이하로 되돌아가려면 앱을 종료하고 이전 버전이 읽을 수 있는 설정 사본을 복원해야 합니다. v3 설정은 이전 앱에서 열 수 없습니다. 백업은 이후 저장으로 갱신되므로 업데이트 전에 별도 사본을 남겨 두세요. [설정 이관과 복원](configuration.md#이전-설정-이관)에 자세한 절차가 있습니다.
 
 자동 업데이트는 제공하지 않습니다. 설정을 복구해야 하면 [백업 복구 안내](configuration.md#백업으로-수동-복구)를 참고하세요.
 
@@ -35,7 +37,7 @@ Get-FileHash .\DFragonCropper-0.5.0-x64-portable.exe -Algorithm SHA256
 | Actions의 수동 실행                | 선택한 ref 검사·빌드, artifact 보관. 릴리스는 게시하지 않음 |
 | `v<version>` 태그 push             | 같은 검사·빌드 후 해당 버전의 GitHub Release 게시           |
 
-검사는 lint, format, typecheck, 단위 테스트와 실제 Electron의 **합성 프레임 UI 테스트**를 포함합니다. 패키지는 Windows runner에서 native 의존성을 설치해 만듭니다. Hosted runner 검사를 실제 Windows 10의 물리 키보드·DPI·커서 제외 검증으로 해석하지 않습니다. 그 근거는 별도의 [실기 기록](local-mvp-verification.md)에 있습니다.
+검사는 lint, format, typecheck, 단위 테스트와 실제 Electron의 **합성 프레임 UI 테스트**를 포함합니다. 추가로 별도 foreground 프로세스와 `SendInput`을 사용하는 native 단축키 fixture를 실행합니다. 이 입력도 합성이며 실제 물리 키 입력은 아닙니다. 패키지는 Windows runner에서 native 의존성을 설치해 만듭니다. Hosted runner 검사를 실제 Windows 10의 물리 키보드·DPI·커서 제외 검증으로 해석하지 않습니다. 그 근거는 별도의 [실기 기록](local-mvp-verification.md)에 있습니다.
 
 브랜치의 최신 빌드를 확인하려면 [Actions](https://github.com/blahaj94/dfragon-cropper/actions/workflows/windows.yml)의 성공한 실행에서 artifact를 내려받습니다. artifact는 개발 빌드를 확인하기 위한 보관 파일이며, 공개 다운로드는 Releases를 사용합니다.
 
@@ -46,8 +48,8 @@ Get-FileHash .\DFragonCropper-0.5.0-x64-portable.exe -Algorithm SHA256
 3. 발행할 커밋에 패키지 버전과 같은 태그를 붙이고 push합니다.
 
 ```sh
-git tag v0.5.0
-git push origin v0.5.0
+git tag v0.6.0
+git push origin v0.6.0
 ```
 
 태그와 패키지 버전이 다르거나 릴리스 노트가 없으면 배포가 실패합니다. 0.x 버전은 미리보기 릴리스로 표시합니다. 코드서명과 자동 업데이트는 이 워크플로에 포함하지 않습니다.

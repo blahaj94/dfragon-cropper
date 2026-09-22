@@ -1,8 +1,8 @@
 import koffi from 'koffi'
+import { defaultShortcuts, type ShortcutSettings } from '../shared/shortcuts'
+import { ShortcutKeyState } from './shortcuts/key-state'
 
 const WH_KEYBOARD_LL = 13
-const VK_SNAPSHOT = 0x2c
-const VK_F12 = 0x7b
 const WM_KEYDOWN = 0x0100
 const WM_KEYUP = 0x0101
 const WM_SYSKEYDOWN = 0x0104
@@ -14,8 +14,9 @@ export interface PrintScreenListener {
 
 /** Start after Electron is ready so the installing thread has its Windows message loop. */
 export function startPrintScreenListener(
-  onPress: () => void,
-  onSelectRoi?: () => void
+  onPress: (virtualKey: number) => void,
+  onSelectRoi?: () => void,
+  getShortcuts: () => ShortcutSettings = defaultShortcuts
 ): PrintScreenListener {
   if (process.platform !== 'win32') {
     throw new Error('The PrintScreen keyboard listener requires Windows.')
@@ -44,8 +45,16 @@ export function startPrintScreenListener(
   const unhook = user32.func('__stdcall', 'UnhookWindowsHookEx', 'bool', ['void *'])
   const getModuleHandle = kernel32.func('__stdcall', 'GetModuleHandleW', 'void *', ['str16'])
   const getLastError = kernel32.func('__stdcall', 'GetLastError', 'uint32_t', [])
+  const getAsyncKeyState = user32.func('__stdcall', 'GetAsyncKeyState', 'int16_t', ['int32_t'])
+  const held = (key: number) => (Number(getAsyncKeyState(key)) & 0x8000) !== 0
+  const readModifiers = () => ({
+    ctrl: held(0x11),
+    alt: held(0x12),
+    shift: held(0x10),
+    meta: held(0x5b) || held(0x5c)
+  })
   let active = true
-  const down = new Set<number>()
+  const keys = new ShortcutKeyState()
   let released = false
   const pending = new Set<NodeJS.Immediate>()
 
@@ -53,30 +62,27 @@ export function startPrintScreenListener(
     (code: number, message: number | bigint, key: bigint | null): number | bigint => {
       let consumeSelectionKey = false
       try {
-        // Inspect only the first DWORD (vkCode); neither key contents nor other keys are stored.
+        // Inspect only vkCode; key-pair state is transient and input is never logged.
         if (active && code === 0 && key !== null) {
           const virtualKey = koffi.decode.uint32(key)
-          const notify =
-            virtualKey === VK_SNAPSHOT ? onPress : virtualKey === VK_F12 ? onSelectRoi : undefined
           const event = Number(message)
-          // F12 is the explicit app selection shortcut. Consuming its key pair
-          // prevents the foreground app from changing the screen before capture.
-          // Legacy listeners without this callback keep forwarding F12 unchanged.
-          consumeSelectionKey =
-            virtualKey === VK_F12 &&
-            !!onSelectRoi &&
-            (event === WM_KEYDOWN ||
-              event === WM_SYSKEYDOWN ||
-              event === WM_KEYUP ||
-              event === WM_SYSKEYUP)
-          if (notify && (event === WM_KEYUP || event === WM_SYSKEYUP)) {
-            down.delete(virtualKey)
-          } else if (
-            notify &&
-            (event === WM_KEYDOWN || event === WM_SYSKEYDOWN) &&
-            !down.has(virtualKey)
-          ) {
-            down.add(virtualKey)
+          const phase =
+            event === WM_KEYDOWN || event === WM_SYSKEYDOWN
+              ? 'down'
+              : event === WM_KEYUP || event === WM_SYSKEYUP
+                ? 'up'
+                : null
+          const result = phase
+            ? keys.handle(virtualKey, phase, getShortcuts(), readModifiers, !!onSelectRoi)
+            : { consume: false, action: undefined }
+          consumeSelectionKey = result.consume
+          const notify =
+            result.action === 'capture'
+              ? () => onPress(virtualKey)
+              : result.action === 'selectRoi'
+                ? onSelectRoi
+                : undefined
+          if (notify) {
             const notification = setImmediate(() => {
               pending.delete(notification)
               if (active) notify()
@@ -110,7 +116,7 @@ export function startPrintScreenListener(
     stop(): void {
       if (released) return
       active = false
-      down.clear()
+      keys.reset()
       for (const notification of pending) clearImmediate(notification)
       pending.clear()
       if (!unhook(handle)) {

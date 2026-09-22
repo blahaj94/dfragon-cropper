@@ -1,6 +1,7 @@
 import { app, dialog, shell, type Tray } from 'electron'
 import { writeFileSync } from 'node:fs'
 import { IPC, type SpikeState } from '../shared/contracts'
+import { defaultShortcuts } from '../shared/shortcuts'
 import { applicationIconPath } from './app-icon'
 import { capturePrimaryFrame } from './capture'
 import { createCaptureController } from './capture/controller'
@@ -92,7 +93,8 @@ const profiles = createProfileController({
   configPath: runtime.configPath,
   logger,
   publish,
-  selectionActive: selection.isActive
+  selectionActive: selection.isActive,
+  onSaved: () => shortcuts?.refresh()
 })
 const library = createCaptureLibrary(runtime.captureRoots)
 const groundTruth = createGroundTruthLibrary(runtime.captureRoots)
@@ -114,6 +116,10 @@ function installDesktop(): void {
     isShuttingDown,
     closeToTray: () => !!(state.backgroundAvailable && state.settings?.preferences.closeToTray),
     nativeSelectionShortcut: () => shortcuts?.nativeSelection ?? false,
+    focusedCaptureAvailable: () => state.mode !== 'global-shortcut',
+    getShortcuts: () => state.settings?.shortcuts ?? defaultShortcuts(),
+    requestCapture: (key) =>
+      void operations.track(capture(key === 0x2c ? 'printscreen' : 'shortcut')),
     requestSelection: requestRoiSelection,
     onUnavailable: () => selectionWindow?.cancel(),
     quit: () => app.quit()
@@ -183,7 +189,7 @@ app
     connectIpc()
     shortcuts = startCaptureShortcuts({
       state,
-      capture: () => void operations.track(capture('printscreen')),
+      capture: (trigger) => void operations.track(capture(trigger)),
       selectRoi: requestRoiSelection
     })
     await mainWindow!.window.loadURL(runtime.documentUrl)

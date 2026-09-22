@@ -1,4 +1,5 @@
 import type { Profile, ProfileCommand, ProfileSettings, Region } from '../../shared/contracts'
+import { defaultShortcuts, parseShortcutSettings } from '../../shared/shortcuts'
 
 function object(value: unknown, label: string): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -60,6 +61,9 @@ function rectangle(value: unknown): Omit<Region, 'id'> {
 export function parseProfileCommand(value: unknown): ProfileCommand {
   const input = object(value, 'Profile command')
   switch (input.type) {
+    case 'set-shortcuts':
+      keys(input, ['type', 'shortcuts'])
+      return { type: input.type, shortcuts: parseShortcutSettings(input.shortcuts) }
     case 'set-preferences':
       keys(input, ['type', 'saveOriginal', 'closeToTray'])
       return {
@@ -107,11 +111,14 @@ export function parseProfileCommand(value: unknown): ProfileCommand {
   }
 }
 
-export function parseSettings(text: string): { settings: ProfileSettings; sourceVersion: 1 | 2 } {
+export function parseSettings(text: string): {
+  settings: ProfileSettings
+  sourceVersion: 1 | 2 | 3
+} {
   try {
     const input = object(JSON.parse(text), 'Config')
-    if (input.schemaVersion !== 1 && input.schemaVersion !== 2) {
-      throw new Error('Unsupported config schemaVersion; expected 1 or 2.')
+    if (input.schemaVersion !== 1 && input.schemaVersion !== 2 && input.schemaVersion !== 3) {
+      throw new Error('Unsupported config schemaVersion; expected 1, 2 or 3.')
     }
     const sourceVersion = input.schemaVersion
     keys(input, [
@@ -119,7 +126,8 @@ export function parseSettings(text: string): { settings: ProfileSettings; source
       'nextProfileId',
       'activeProfileId',
       'profiles',
-      ...(sourceVersion === 2 ? ['preferences'] : [])
+      ...(sourceVersion >= 2 ? ['preferences'] : []),
+      ...(sourceVersion === 3 ? ['shortcuts'] : [])
     ])
     const savedPreferences =
       sourceVersion === 1
@@ -169,11 +177,12 @@ export function parseSettings(text: string): { settings: ProfileSettings; source
     return {
       sourceVersion,
       settings: {
-        schemaVersion: 2,
+        schemaVersion: 3,
         nextProfileId,
         activeProfileId,
         profiles,
-        preferences: savedPreferences
+        preferences: savedPreferences,
+        shortcuts: sourceVersion === 3 ? parseShortcutSettings(input.shortcuts) : defaultShortcuts()
       }
     }
   } catch (error) {

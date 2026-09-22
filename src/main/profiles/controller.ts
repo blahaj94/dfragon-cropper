@@ -7,6 +7,7 @@ interface ProfileControllerOptions {
   logger: { write(event: string, details?: Record<string, unknown>): void }
   publish(): void
   selectionActive(): boolean
+  onSaved?(): void
 }
 
 /** Translate profile persistence outcomes into the app's saved settings and form errors. */
@@ -15,7 +16,8 @@ export function createProfileController({
   configPath,
   logger,
   publish,
-  selectionActive
+  selectionActive,
+  onSaved
 }: ProfileControllerOptions) {
   let store: ProfileStore | null = null
   return {
@@ -44,6 +46,7 @@ export function createProfileController({
         throw error
       }
       state.error = null
+      onSaved?.()
       publish()
       return state
     }

@@ -1,5 +1,8 @@
 import { BrowserWindow, screen } from 'electron'
 import { restrictWindow } from './window-security'
+import type { ShortcutSettings } from '../shared/shortcuts'
+import { inputVirtualKey } from './shortcuts/focused-input'
+import { ShortcutKeyState } from './shortcuts/key-state'
 
 /** Desktop presentation only: creation, focus, close behavior and temporary hiding. */
 export class MainWindow {
@@ -14,6 +17,9 @@ export class MainWindow {
       isShuttingDown(): boolean
       closeToTray(): boolean
       nativeSelectionShortcut(): boolean
+      focusedCaptureAvailable(): boolean
+      getShortcuts(): ShortcutSettings
+      requestCapture(virtualKey: number): void
       requestSelection(): void
       onUnavailable(): void
       quit(): void
@@ -45,11 +51,23 @@ export class MainWindow {
     })
     window.on('closed', options.onUnavailable)
     window.webContents.on('render-process-gone', options.onUnavailable)
+    const keys = new ShortcutKeyState()
+    window.on('blur', () => keys.reset())
     window.webContents.on('before-input-event', (event, input) => {
-      if (!options.nativeSelectionShortcut() && input.key === 'F12') {
-        event.preventDefault()
-        if (input.type === 'keyDown' && !input.isAutoRepeat) options.requestSelection()
-      }
+      if (options.nativeSelectionShortcut()) return
+      const key = inputVirtualKey(input)
+      if (key === null || (input.type !== 'keyDown' && input.type !== 'keyUp')) return
+      const result = keys.handle(
+        key,
+        input.type === 'keyDown' ? 'down' : 'up',
+        options.getShortcuts(),
+        () => ({ ctrl: input.control, alt: input.alt, shift: input.shift, meta: input.meta })
+      )
+      if (result.consume) event.preventDefault()
+      if (input.isAutoRepeat) return
+      if (result.action === 'selectRoi') options.requestSelection()
+      else if (result.action === 'capture' && options.focusedCaptureAvailable())
+        options.requestCapture(key)
     })
   }
 

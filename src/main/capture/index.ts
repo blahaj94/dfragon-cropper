@@ -19,7 +19,8 @@ export type { CaptureRegion, PixelFrame } from './pixels'
 export type { PixelFrame as Frame } from './pixels'
 export { listCaptures, readCaptureImage, resolveCaptureFolder } from './history'
 
-export type CaptureTrigger = 'button' | 'printscreen' | 'fixture' | 'native-pixel-check'
+export type CaptureTrigger =
+  'button' | 'printscreen' | 'shortcut' | 'fixture' | 'native-pixel-check'
 
 export interface CaptureResult {
   eventId: string

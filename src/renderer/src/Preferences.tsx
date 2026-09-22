@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import type { ProfileCommand, ProfileSettings, SpikeState } from '../../shared/contracts'
 import { userError } from './errors'
+import { ShortcutPreferences } from './settings/ShortcutPreferences'
+import { formatShortcut } from '../../shared/shortcuts'
 
 export function Preferences({
   settings,
@@ -26,6 +28,12 @@ export function Preferences({
     !!draft &&
     (draft.saveOriginal !== settings?.preferences.saveOriginal ||
       draft.closeToTray !== settings?.preferences.closeToTray)
+
+  function change(value: ProfileSettings['preferences']) {
+    setDraft(value)
+    setError(null)
+    setNotice('')
+  }
   return (
     <section aria-labelledby="settings-heading">
       <h2 id="settings-heading">Settings</h2>
@@ -62,9 +70,7 @@ export function Preferences({
               <input
                 type="checkbox"
                 checked={preferences.saveOriginal}
-                onChange={(event) =>
-                  setDraft({ ...preferences, saveOriginal: event.target.checked })
-                }
+                onChange={(event) => change({ ...preferences, saveOriginal: event.target.checked })}
               />
               Save original PNG
             </label>
@@ -73,14 +79,14 @@ export function Preferences({
               <input
                 type="checkbox"
                 checked={preferences.closeToTray}
-                onChange={(event) =>
-                  setDraft({ ...preferences, closeToTray: event.target.checked })
-                }
+                onChange={(event) => change({ ...preferences, closeToTray: event.target.checked })}
               />
               Close window to tray
             </label>
             <p>
-              Keep listening for PrintScreen after closing the window. Use Quit to stop the app.
+              Keep listening for{' '}
+              {settings ? formatShortcut(settings.shortcuts.capture) : 'the capture shortcut'} after
+              closing the window. Use Quit to stop the app.
             </p>
             {dirty && <p className="draft-notice">Unsaved settings</p>}
             <div className="actions">
@@ -93,6 +99,7 @@ export function Preferences({
                 onClick={() => {
                   setDraft(null)
                   setError(null)
+                  setNotice('')
                 }}
               >
                 Discard settings changes
@@ -100,6 +107,14 @@ export function Preferences({
             </div>
           </fieldset>
         </form>
+      )}
+      {settings && (
+        <ShortcutPreferences
+          shortcuts={settings.shortcuts}
+          blocked={blocked || saving}
+          onCommand={onCommand}
+          onSavingChange={onSavingChange}
+        />
       )}
     </section>
   )
