@@ -3,13 +3,14 @@ import { ProfileEditor } from './ProfileEditor'
 import { CaptureHistory } from './CaptureHistory'
 import { Preferences } from './Preferences'
 import { useCaptureApp } from './useCaptureApp'
+import { GroundTruth } from './ground-truth/GroundTruth'
 
 export function App() {
   const { state, requestError, capture, updateProfiles, hideToTray, quit, openOutputFolder } =
     useCaptureApp()
   const [profileSaving, setProfileSaving] = useState(false)
   const [previewing, setPreviewing] = useState(false)
-  const [tab, setTab] = useState<'Profiles' | 'Captures' | 'Settings'>('Profiles')
+  const [tab, setTab] = useState<'Profiles' | 'Captures' | 'Ground Truth' | 'Settings'>('Profiles')
 
   const lastCapture = state?.lastCapture
   const error = requestError ?? state?.error
@@ -95,37 +96,39 @@ export function App() {
       {error && error !== state?.settingsError && <p role="alert">{error}</p>}
 
       <nav className="tabs" role="tablist" aria-label="Workspace">
-        {(['Profiles', 'Captures', 'Settings'] as const).map((name, index, tabs) => (
-          <button
-            key={name}
-            id={`tab-${name}`}
-            type="button"
-            role="tab"
-            aria-selected={tab === name}
-            aria-controls={`panel-${name}`}
-            tabIndex={tab === name ? 0 : -1}
-            onClick={() => setTab(name)}
-            onKeyDown={(event) => {
-              const next =
-                event.key === 'ArrowRight'
-                  ? tabs[(index + 1) % tabs.length]
-                  : event.key === 'ArrowLeft'
-                    ? tabs[(index + tabs.length - 1) % tabs.length]
-                    : event.key === 'Home'
-                      ? tabs[0]
-                      : event.key === 'End'
-                        ? tabs[tabs.length - 1]
-                        : undefined
-              if (next) {
-                event.preventDefault()
-                setTab(next)
-                document.getElementById(`tab-${next}`)?.focus()
-              }
-            }}
-          >
-            {name}
-          </button>
-        ))}
+        {(['Profiles', 'Captures', 'Ground Truth', 'Settings'] as const).map(
+          (name, index, tabs) => (
+            <button
+              key={name}
+              id={`tab-${name.replaceAll(' ', '-')}`}
+              type="button"
+              role="tab"
+              aria-selected={tab === name}
+              aria-controls={`panel-${name.replaceAll(' ', '-')}`}
+              tabIndex={tab === name ? 0 : -1}
+              onClick={() => setTab(name)}
+              onKeyDown={(event) => {
+                const next =
+                  event.key === 'ArrowRight'
+                    ? tabs[(index + 1) % tabs.length]
+                    : event.key === 'ArrowLeft'
+                      ? tabs[(index + tabs.length - 1) % tabs.length]
+                      : event.key === 'Home'
+                        ? tabs[0]
+                        : event.key === 'End'
+                          ? tabs[tabs.length - 1]
+                          : undefined
+                if (next) {
+                  event.preventDefault()
+                  setTab(next)
+                  document.getElementById(`tab-${next.replaceAll(' ', '-')}`)?.focus()
+                }
+              }}
+            >
+              {name}
+            </button>
+          )
+        )}
       </nav>
 
       <div
@@ -184,6 +187,14 @@ export function App() {
         hidden={tab !== 'Captures'}
       >
         <CaptureHistory visible={tab === 'Captures'} lastEventId={lastCapture?.eventId} />
+      </div>
+      <div
+        role="tabpanel"
+        id="panel-Ground-Truth"
+        aria-labelledby="tab-Ground-Truth"
+        hidden={tab !== 'Ground Truth'}
+      >
+        <GroundTruth visible={tab === 'Ground Truth'} />
       </div>
       <div
         role="tabpanel"

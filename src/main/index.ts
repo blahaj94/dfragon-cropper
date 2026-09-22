@@ -8,6 +8,7 @@ import { createFixtureSource } from './capture/fixture'
 import { createCaptureLibrary } from './capture/library'
 import { startCaptureShortcuts } from './capture-shortcuts'
 import { installMainIpc } from './ipc'
+import { createGroundTruthLibrary } from './ground-truth'
 import { createLogger } from './logging'
 import { MainWindow } from './main-window'
 import { PendingOperations } from './operations'
@@ -94,6 +95,7 @@ const profiles = createProfileController({
   selectionActive: selection.isActive
 })
 const library = createCaptureLibrary(runtime.captureRoots)
+const groundTruth = createGroundTruthLibrary(runtime.captureRoots)
 const openCaptureFolder = async (eventId?: unknown) => {
   const error = await shell.openPath(await library.resolveFolder(eventId))
   if (error) throw new Error(error)
@@ -154,6 +156,10 @@ function connectIpc(): void {
       selectRoi: selection.select,
       listCaptures: library.list,
       readCaptureImage: library.readImage,
+      listGroundTruthCaptures: groundTruth.list,
+      readGroundTruthCapture: groundTruth.read,
+      readGroundTruthImage: groundTruth.readImage,
+      saveGroundTruth: groundTruth.save,
       openCaptureFolder,
       minimizeToTray: async () => {
         if (!state.backgroundAvailable) throw new Error('Background tray is not available.')

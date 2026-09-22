@@ -1,3 +1,14 @@
+import type { GroundTruthApi } from './ground-truth'
+
+export { GROUND_TRUTH_TEXT_LIMIT } from './ground-truth'
+export type {
+  GroundTruthApi,
+  GroundTruthCapture,
+  GroundTruthCommand,
+  GroundTruthPage,
+  GroundTruthSaveResult
+} from './ground-truth'
+
 export interface Region {
   id: number
   x: number
@@ -85,7 +96,7 @@ export interface SpikeState {
   backgroundAvailable: boolean
 }
 
-export interface SpikeApi {
+export interface SpikeApi extends GroundTruthApi {
   getState(): Promise<SpikeState>
   captureNow(): Promise<SpikeState>
   onState(callback: (state: SpikeState) => void): () => void
@@ -111,6 +122,10 @@ export const IPC = {
   listCaptures: 'capture:list',
   readCaptureImage: 'capture:image',
   openCaptureFolder: 'capture:open-folder',
+  listGroundTruthCaptures: 'ground-truth:list',
+  readGroundTruthCapture: 'ground-truth:read',
+  readGroundTruthImage: 'ground-truth:image',
+  saveGroundTruth: 'ground-truth:save',
   minimizeToTray: 'app:hide',
   quit: 'app:quit'
 } as const

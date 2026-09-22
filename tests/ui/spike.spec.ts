@@ -69,12 +69,16 @@ test('boots with an isolated renderer and reflects a saved fixture capture', asy
       'captureNow',
       'getState',
       'listCaptures',
+      'listGroundTruthCaptures',
       'minimizeToTray',
       'onSelectRoiRequested',
       'onState',
       'openCaptureFolder',
       'quit',
       'readCaptureImage',
+      'readGroundTruthCapture',
+      'readGroundTruthImage',
+      'saveGroundTruth',
       'selectRoi',
       'updateProfiles'
     ]

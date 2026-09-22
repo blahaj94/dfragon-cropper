@@ -4,7 +4,7 @@ import { validateRegions } from '../pixels'
 import { roiFilename } from '../filenames'
 import { eventFolder, eventTimestamp, imageFile, readLimited } from './files'
 
-const MAX_METADATA_BYTES = 1024 * 1024
+export const MAX_METADATA_BYTES = 1024 * 1024
 
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value))
@@ -28,14 +28,15 @@ function text(value: unknown, label: string, maximum = 100): string {
 interface HistoryEvent {
   summary: CaptureSummary
   folder: string
+  metadata: Record<string, unknown>
+  bytes: Buffer
 }
 
 export async function loadEvent(root: string, eventId: string): Promise<HistoryEvent> {
   const timestamp = eventTimestamp(eventId)
   const folder = await eventFolder(root, eventId)
-  const metadata = record(
-    JSON.parse((await readLimited(folder, 'metadata.json', MAX_METADATA_BYTES)).toString('utf8'))
-  )
+  const bytes = await readLimited(folder, 'metadata.json', MAX_METADATA_BYTES)
+  const metadata = record(JSON.parse(bytes.toString('utf8')))
   if (
     metadata.schemaVersion !== 1 ||
     metadata.eventId !== eventId ||
@@ -98,6 +99,8 @@ export async function loadEvent(root: string, eventId: string): Promise<HistoryE
   for (const region of regions) await imageFile(folder, roiFilename(region.id))
   return {
     folder,
+    metadata,
+    bytes,
     summary: {
       eventId,
       capturedAt,

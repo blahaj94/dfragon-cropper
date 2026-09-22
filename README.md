@@ -10,6 +10,8 @@ DFragonCropper는 Windows 화면에서 반복해서 저장할 영역을 미리 �
 
 **Windows 10 x64 · Portable · 로컬 저장 · 0.4.0 미리보기**
 
+현재 개발 소스에는 캡처 결과 이미지마다 캐릭터 닉네임을 작성하는 **Ground Truth** 탭이 추가되었습니다. 오래된 순으로 결과를 훑고 정답을 각 `metadata.json`에 저장합니다. 사용 방법은 [이미지별 정답 작성](docs/ground-truth.md)을 참고하세요. 이 기능은 기존 0.4.0 릴리스 실행 파일에는 포함되지 않습니다.
+
 [Windows 다운로드](https://github.com/blahaj94/dfragon-cropper/releases) · [빠른 시작](#빠른-시작) · [아키텍처](#아키텍처) · [사용 가이드](docs/user-guide.md)
 
 ![주 모니터의 한 프레임에서 두 ROI를 각각 PNG로 저장하는 DFragonCropper 개념도](docs/images/capture-overview.svg)

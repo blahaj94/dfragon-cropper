@@ -15,6 +15,12 @@ const api: SpikeApi = {
   readCaptureImage: (eventId, regionId) =>
     ipcRenderer.invoke(IPC.readCaptureImage, eventId, regionId),
   openCaptureFolder: (eventId) => ipcRenderer.invoke(IPC.openCaptureFolder, eventId),
+  listGroundTruthCaptures: (cursor) => ipcRenderer.invoke(IPC.listGroundTruthCaptures, cursor),
+  readGroundTruthCapture: (captureKey) =>
+    ipcRenderer.invoke(IPC.readGroundTruthCapture, captureKey),
+  readGroundTruthImage: (captureKey, regionId) =>
+    ipcRenderer.invoke(IPC.readGroundTruthImage, captureKey, regionId),
+  saveGroundTruth: (command) => ipcRenderer.invoke(IPC.saveGroundTruth, command),
   minimizeToTray: () => ipcRenderer.invoke(IPC.minimizeToTray),
   quit: () => ipcRenderer.invoke(IPC.quit),
   onState: (callback) => {

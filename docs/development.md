@@ -72,10 +72,12 @@ src/main/printscreen.ts    Win32 pass-through 키보드 훅
 src/main/roi-selection.ts  별도 전체화면 ROI 선택창과 제한된 IPC
 src/main/roi-selection-controller.ts 화면 캡처·선택창·편집창 복원 흐름
 src/main/capture/          캡처 조건·GDI·픽셀·이벤트 저장·이력별 모듈
+src/main/ground-truth/     과거 캡처 순회·이미지별 정답·안전한 metadata 갱신
 src/main/profiles/         검증·명령·파일 저장·앱 상태 반영별 모듈
 src/main/logging.ts        로컬 진단 로그와 한 세대 회전
 src/preload/              한정된 typed API
 src/shared/               프로필과 typed IPC 계약
+src/shared/ground-truth.ts 정답 작성 API, 문자열/null 형식과 입력 한도
 src/renderer/             숫자·드래그 ROI 편집, 캡처 기록과 설정 화면
 tests/unit/               좌표·픽셀·프로필·설정·이력 계약 테스트
 tests/ui/                 Playwright Electron 편집·캡처 테스트
