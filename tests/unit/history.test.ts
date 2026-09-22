@@ -1,4 +1,5 @@
 import {
+  cp,
   mkdir,
   mkdtemp,
   readFile,
@@ -19,6 +20,7 @@ import {
   readCaptureImage,
   resolveCaptureFolder
 } from '../../src/main/capture/history'
+import { createCaptureLibrary } from '../../src/main/capture/library'
 
 const directories: string[] = []
 afterEach(async () => {
@@ -269,5 +271,50 @@ describe('history file boundaries', () => {
     await expect(readCaptureImage(root, result.eventId, 7)).rejects.toThrow(/byte limit/)
     await truncate(join(result.outputDirectory, 'metadata.json'), 1024 * 1024 + 1)
     expect(await listCaptures(root)).toEqual({ events: [], skippedEntries: 1, hasMore: false })
+  })
+})
+
+describe('capture library across current and legacy roots', () => {
+  it('prefers current duplicates while preserving legacy listing, folder and image access', async () => {
+    const current = await outputRoot()
+    const legacy = await outputRoot()
+    const older = await capture(legacy, '2026-09-22T08:00:00.000Z')
+    const duplicate = await capture(legacy, '2026-09-22T08:00:01.000Z')
+    const copied = join(current, duplicate.eventId)
+    await cp(duplicate.outputDirectory, copied, { recursive: true })
+    await editMetadata({ ...duplicate, outputDirectory: copied }, (metadata) => {
+      metadata.profile = { id: 3, name: 'Preferred current snapshot' }
+    })
+    const library = createCaptureLibrary([current, legacy])
+    const history = await library.list()
+    expect(history.events.map((event) => event.eventId)).toEqual([duplicate.eventId, older.eventId])
+    expect(history.events[0].profile?.name).toBe('Preferred current snapshot')
+    expect(history).toMatchObject({ skippedEntries: 0, hasMore: false })
+    expect(await library.resolveFolder(duplicate.eventId)).toBe(copied)
+    expect(await library.resolveFolder(older.eventId)).toBe(older.outputDirectory)
+    expect(await library.readImage(duplicate.eventId, 7)).toBe(
+      `data:image/png;base64,${(await readFile(join(copied, '007.png'))).toString('base64')}`
+    )
+    expect(await library.readImage(older.eventId, null)).toBe(
+      `data:image/png;base64,${(await readFile(older.originalPath!)).toString('base64')}`
+    )
+    expect(await readFile(join(duplicate.outputDirectory, 'metadata.json'), 'utf8')).toContain(
+      'Saved profile'
+    )
+  })
+
+  it('creates only the requested output root and validates identifiers before exposing files', async () => {
+    const parent = await outputRoot()
+    const root = join(parent, 'new-captures')
+    const library = createCaptureLibrary([root])
+    expect(await library.list()).toEqual({ events: [], skippedEntries: 0, hasMore: false })
+    expect(await library.resolveFolder()).toBe(root)
+    await expect(library.resolveFolder({ eventId: 'unsafe' })).rejects.toThrow(
+      'A capture event ID is required'
+    )
+    await expect(library.resolveFolder('../outside')).rejects.toThrow(
+      'invalid or no longer available'
+    )
+    await expect(library.readImage('../outside', '7')).rejects.toThrow('A positive ROI ID or null')
   })
 })

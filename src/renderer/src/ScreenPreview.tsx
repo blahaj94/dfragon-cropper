@@ -1,97 +1,17 @@
-import { useEffect, useRef, useState } from 'react'
-import type { Region, RoiSelection } from '../../shared/contracts'
-import { userError } from './errors'
+import { useRoiSelector, type RoiSelectorInputs } from './roi-selector/useRoiSelector'
 import './roi-preview.css'
 
-type Rectangle = Omit<Region, 'id'>
-export type PreviewDraft = { rectangle: Rectangle | null; dirty: boolean; error: string | null }
-
-export function ScreenPreview({
-  profileId,
-  profileName,
-  regions,
-  drafts,
-  disabled,
-  shortcutStatus,
-  isTargetAvailable,
-  onAdd,
-  onRedraw,
-  onSave,
-  onDiscard,
-  onBusyChange,
-  onSelectionComplete
-}: {
-  profileId: number
-  profileName: string
-  regions: Region[]
-  drafts: Record<number, PreviewDraft>
-  disabled: boolean
-  shortcutStatus: string
-  isTargetAvailable: (profileId: number, regionId: number | null) => boolean
-  onAdd: (rectangle: Rectangle) => Promise<boolean>
-  onRedraw: (profileId: number, regionId: number, rectangle: Rectangle) => void
-  onSave: (regionId: number) => Promise<boolean>
-  onDiscard: (regionId: number) => void
-  onBusyChange: (busy: boolean) => void
-  onSelectionComplete: (profileId: number) => void
-}) {
-  const [selections, setSelections] = useState<Record<number, RoiSelection>>({})
-  const [targets, setTargets] = useState<Record<number, number | null>>({})
-  const [replacementTargets, setReplacementTargets] = useState<Record<number, number>>({})
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const requestInFlight = useRef(false)
-  const mounted = useRef(true)
-  const target = regions.find((region) => region.id === targets[profileId]) ?? null
-  const regionId = target?.id ?? null
-  const draft = target ? drafts[target.id] : null
-  const replacement = regions.find((region) => region.id === replacementTargets[profileId])
-  const rectangle = target ? draft?.rectangle : selections[profileId]?.rectangle
-  const latest = useRef({ isTargetAvailable, onRedraw, onSelectionComplete, onBusyChange })
-  latest.current = { isTargetAvailable, onRedraw, onSelectionComplete, onBusyChange }
-
-  async function select() {
-    if (disabled || requestInFlight.current || !isTargetAvailable(profileId, regionId)) return
-    const requested = { profileId, regionId }
-    requestInFlight.current = true
-    setLoading(true)
-    setError(null)
-    onBusyChange(true)
-    try {
-      const result = await window.spike.selectRoi()
-      if (!result || !mounted.current) return
-      if (!latest.current.isTargetAvailable(requested.profileId, requested.regionId)) {
-        setError('The selected profile or ROI is no longer available. Select an ROI again.')
-        return
-      }
-      if (requested.regionId === null) {
-        setSelections((current) => ({ ...current, [requested.profileId]: result }))
-      } else {
-        latest.current.onRedraw(requested.profileId, requested.regionId, result.rectangle)
-      }
-      latest.current.onSelectionComplete(requested.profileId)
-    } catch (reason) {
-      if (mounted.current) setError(userError(reason))
-    } finally {
-      requestInFlight.current = false
-      if (mounted.current) {
-        setLoading(false)
-        latest.current.onBusyChange(false)
-      }
-    }
+export function ScreenPreview(
+  props: RoiSelectorInputs & {
+    profileName: string
+    shortcutStatus: string
+    onSave: (regionId: number) => Promise<boolean>
+    onDiscard: (regionId: number) => void
   }
-
-  const selectRef = useRef(select)
-  selectRef.current = select
-  useEffect(() => {
-    mounted.current = true
-    const unsubscribe = window.spike.onSelectRoiRequested(() => void selectRef.current())
-    return () => {
-      mounted.current = false
-      unsubscribe()
-      if (requestInFlight.current) latest.current.onBusyChange(false)
-    }
-  }, [])
+) {
+  const { profileId, profileName, regions, disabled, shortcutStatus, onSave, onDiscard } = props
+  const selector = useRoiSelector(props)
+  const { target, regionId, draft, replacement, rectangle, loading, error, select } = selector
 
   return (
     <section className="screen-preview roi-selector" aria-labelledby="screen-preview-heading">
@@ -112,10 +32,7 @@ export function ScreenPreview({
           value={regionId ?? 'new'}
           disabled={disabled || loading}
           onChange={(event) =>
-            setTargets((current) => ({
-              ...current,
-              [profileId]: event.target.value === 'new' ? null : Number(event.target.value)
-            }))
+            selector.changeTarget(event.target.value === 'new' ? null : Number(event.target.value))
           }
         >
           <option value="new">New ROI</option>
@@ -172,15 +89,7 @@ export function ScreenPreview({
           <button
             type="button"
             disabled={!rectangle || disabled || loading}
-            onClick={async () => {
-              if (rectangle && (await onAdd(rectangle))) {
-                setSelections((current) => {
-                  const next = { ...current }
-                  delete next[profileId]
-                  return next
-                })
-              }
-            }}
+            onClick={() => void selector.addSelected()}
           >
             Add drawn ROI
           </button>
@@ -202,12 +111,7 @@ export function ScreenPreview({
                 aria-label="Replace existing ROI"
                 value={replacement?.id ?? ''}
                 disabled={disabled || loading || regions.length === 0}
-                onChange={(event) =>
-                  setReplacementTargets((current) => ({
-                    ...current,
-                    [profileId]: Number(event.target.value)
-                  }))
-                }
+                onChange={(event) => selector.changeReplacement(Number(event.target.value))}
               >
                 <option value="">Select saved ROI</option>
                 {regions.map((region) => (
@@ -220,11 +124,7 @@ export function ScreenPreview({
             <button
               type="button"
               disabled={!rectangle || !replacement || disabled || loading}
-              onClick={() => {
-                if (!rectangle || !replacement) return
-                onRedraw(profileId, replacement.id, rectangle)
-                setTargets((current) => ({ ...current, [profileId]: replacement.id }))
-              }}
+              onClick={selector.applyToExisting}
             >
               Edit drawn ROI
             </button>

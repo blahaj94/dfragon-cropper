@@ -4,23 +4,17 @@ import { join, resolve } from 'node:path'
 import {
   cropFrame,
   encodeFramePng,
-  roiFilename,
   validateFrame,
   validateRegions,
   type CaptureRegion,
   type PixelFrame
 } from './pixels'
 import { capturePrimaryFrame } from './win32'
+import { roiFilename } from './filenames'
 
 export { capturePrimaryFrame } from './win32'
-export {
-  bgrxToRgba,
-  cropFrame,
-  encodeFramePng,
-  roiFilename,
-  validateFrame,
-  validateRegions
-} from './pixels'
+export { roiFilename } from './filenames'
+export { bgrxToRgba, cropFrame, encodeFramePng, validateFrame, validateRegions } from './pixels'
 export type { CaptureRegion, PixelFrame } from './pixels'
 export type { PixelFrame as Frame } from './pixels'
 export { listCaptures, readCaptureImage, resolveCaptureFolder } from './history'

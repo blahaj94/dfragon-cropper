@@ -5,6 +5,7 @@ directories:
   output: dist
 files:
   - out/**
+  - '!out/main/windows-check.js'
   - package.json
   - '!**/{.env,.env.*,.npmrc,*.pem,*.key,*.pfx,*.p12}'
 extraResources:

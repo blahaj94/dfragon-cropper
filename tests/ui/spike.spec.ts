@@ -2,6 +2,7 @@ import { _electron as electron, expect, test, type ElectronApplication } from '@
 import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { PNG } from 'pngjs'
 import { dragRoi, openRoiOverlay } from './roi-helpers'
 
@@ -10,7 +11,7 @@ let temporaryDirectory: string | undefined
 
 async function launchApp(
   mode?: 'success' | 'failure',
-  options: { configContents?: string; captureEnabled?: boolean } = {}
+  options: { configContents?: string; captureEnabled?: boolean; rendererUrl?: string } = {}
 ) {
   temporaryDirectory ??= await mkdtemp(join(tmpdir(), 'dfragon-ui-'))
   const configFile = join(temporaryDirectory, 'config.json')
@@ -25,6 +26,7 @@ async function launchApp(
     env: {
       ...environment,
       ...(mode ? { DFRAGON_FIXTURE: mode } : {}),
+      ...(options.rendererUrl ? { ELECTRON_RENDERER_URL: options.rendererUrl } : {}),
       DFRAGON_OUTPUT_DIR: join(temporaryDirectory, 'captures'),
       DFRAGON_USER_DATA: join(temporaryDirectory, 'user-data'),
       DFRAGON_CONFIG_FILE: configFile
@@ -101,6 +103,18 @@ test('boots with an isolated renderer and reflects a saved fixture capture', asy
   await expect(page.getByTestId('capture-counters')).toHaveText(
     'Completed: 2 · Failed: 0 · Skipped while busy: 0'
   )
+})
+
+test('preserves a configured file URL including query and fragment for trusted IPC', async () => {
+  const url = pathToFileURL(resolve('out/renderer/index.html'))
+  url.search = '?debug=1'
+  url.hash = 'profiles'
+  const page = await launchApp('success', { rendererUrl: url.href })
+  expect(page.url()).toBe(url.href)
+  const state = await page.evaluate(() => window.spike.getState())
+  expect(state.mode).toBe('fixture')
+  expect(state.settingsError).toBeNull()
+  await expect(page.getByRole('alert')).toHaveCount(0)
 })
 
 test('shows capture failure without claiming a successful capture', async () => {

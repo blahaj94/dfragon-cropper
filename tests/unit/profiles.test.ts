@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { loadProfileStore, ProfileFileConflictError } from '../../src/main/profiles'
+import { createProfileController } from '../../src/main/profiles/controller'
+import type { SpikeState } from '../../src/shared/contracts'
 
 const renameFailure = vi.hoisted(() => ({ target: null as string | null }))
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -50,6 +52,95 @@ const legacySettings = {
     { id: 17, name: 'Empty profile', nextRegionId: 12, regions: [] }
   ]
 }
+
+function controllerFixture(path: string) {
+  const state: SpikeState = {
+    platform: 'test',
+    mode: 'fixture',
+    triggerStatus: 'Synthetic fixture',
+    selectionShortcutStatus: 'Synthetic fixture',
+    busy: false,
+    completed: 0,
+    failed: 0,
+    skipped: 0,
+    lastCapture: null,
+    error: 'Earlier capture error',
+    settings: null,
+    settingsError: null,
+    outputDirectory: dirname(path),
+    backgroundAvailable: false
+  }
+  const publish = vi.fn()
+  const logger = { write: vi.fn() }
+  const selectionActive = vi.fn(() => false)
+  return {
+    state,
+    publish,
+    logger,
+    selectionActive,
+    controller: createProfileController({
+      state,
+      configPath: path,
+      publish,
+      logger,
+      selectionActive
+    })
+  }
+}
+
+describe('profile application controller', () => {
+  it('preserves saved state on selection or write failures and publishes only committed edits', async () => {
+    const path = await configPath()
+    const { controller, state, selectionActive, publish, logger } = controllerFixture(path)
+    await controller.load()
+    const saved = structuredClone(state.settings)
+    const request = { type: 'rename-profile', profileId: 1, name: 'Saved name' }
+    selectionActive.mockReturnValue(true)
+    await expect(controller.update(request)).rejects.toThrow('Finish or cancel screen selection')
+    expect(logger.write).not.toHaveBeenCalled()
+    selectionActive.mockReturnValue(false)
+    renameFailure.target = path
+    await expect(controller.update(request)).rejects.toThrow('Simulated config replacement failure')
+    expect(state.settings).toEqual(saved)
+    expect(state.settingsError).toBeNull()
+    expect(state.error).toBe('Earlier capture error')
+    expect(publish).not.toHaveBeenCalled()
+    expect(logger.write).toHaveBeenCalledWith('settings.save-failed', expect.any(Object))
+    renameFailure.target = null
+    // Capture-time updates remain allowed; only a screen selection blocks editing.
+    state.busy = true
+    expect(await controller.update(request)).toBe(state)
+    expect(state.settings?.profiles[0].name).toBe('Saved name')
+    expect(state.error).toBeNull()
+    expect(publish).toHaveBeenCalledTimes(1)
+  })
+
+  it('publishes external-file conflicts and reports load errors without replacing damaged data', async () => {
+    const path = await configPath()
+    const { controller, state, publish, logger } = controllerFixture(path)
+    await controller.load()
+    const saved = structuredClone(state.settings)
+    const damaged = '{broken config'
+    await writeFile(path, damaged)
+    await expect(
+      controller.update({ type: 'rename-profile', profileId: 1, name: 'Not saved' })
+    ).rejects.toBeInstanceOf(ProfileFileConflictError)
+    expect(state.settings).toEqual(saved)
+    expect(state.settingsError).toContain('can no longer be read safely')
+    expect(publish).toHaveBeenCalledTimes(1)
+    expect(logger.write).toHaveBeenCalledWith('settings.save-failed', expect.any(Object))
+
+    const restarted = controllerFixture(path)
+    await restarted.controller.load()
+    expect(restarted.state.settings).toBeNull()
+    expect(restarted.state.settingsError).toContain('Cannot load profile config')
+    expect(restarted.logger.write).toHaveBeenCalledWith('settings.load-failed', expect.any(Object))
+    await expect(
+      restarted.controller.update({ type: 'create-profile', name: 'Blocked' })
+    ).rejects.toThrow('Cannot load profile config')
+    expect(await readFile(path, 'utf8')).toBe(damaged)
+  })
+})
 
 describe('persistent profile editing', () => {
   it('creates the default config once and returns detached snapshots', async () => {

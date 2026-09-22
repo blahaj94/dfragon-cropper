@@ -110,8 +110,3 @@ export function encodeFramePng(frame: PixelFrame): Buffer {
     inputHasAlpha: true
   })
 }
-
-export function roiFilename(id: number): string {
-  if (!Number.isSafeInteger(id) || id <= 0) throw new Error('ROI ID must be a positive integer.')
-  return `${String(id).padStart(3, '0')}.png`
-}

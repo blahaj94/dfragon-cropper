@@ -60,11 +60,19 @@ Windows 빌드는 이 ICO를 실행 파일에 넣고, 창과 트레이에도 같
 ## 소스 구조
 
 ```text
-src/main/                  Electron 창, IPC, PrintScreen·트레이·종료 수명 관리
+src/main/index.ts          앱 수명과 담당 모듈을 연결하는 진입점
+src/main/ipc.ts            IPC 발신자·인자 개수 검사와 담당 모듈 호출
+src/main/main-window.ts    메인 창 생성·표시·임시 숨김
+src/main/window-security.ts 창 보안 설정과 발신 창·프레임·URL 확인
+src/main/runtime.ts        개발/portable 실행 설정과 경로
+src/main/operations.ts     진행 중 작업 추적과 종료 전 대기
+src/main/capture-shortcuts.ts 키 감지 설치 결과와 앱 상태 연결
+src/main/tray.ts           트레이 메뉴와 이벤트 연결
 src/main/printscreen.ts    Win32 pass-through 키보드 훅
 src/main/roi-selection.ts  별도 전체화면 ROI 선택창과 제한된 IPC
-src/main/capture/          Primary Monitor GDI 캡처, 픽셀 crop, PNG 저장·이력
-src/main/profiles/         프로필 검증, 설정·백업 저장과 v1 이관
+src/main/roi-selection-controller.ts 화면 캡처·선택창·편집창 복원 흐름
+src/main/capture/          캡처 조건·GDI·픽셀·이벤트 저장·이력별 모듈
+src/main/profiles/         검증·명령·파일 저장·앱 상태 반영별 모듈
 src/main/logging.ts        로컬 진단 로그와 한 세대 회전
 src/preload/              한정된 typed API
 src/shared/               프로필과 typed IPC 계약
@@ -74,6 +82,8 @@ tests/ui/                 Playwright Electron 편집·캡처 테스트
 spike/windows-capture/    보존된 비교 실험, 실기 fixture, 결과와 한계
 resources/                앱 아이콘 원본 PNG와 Windows ICO
 ```
+
+모듈별 책임과 공통화 기준, 의도적으로 유지한 구현은 [코드 구조](code-structure.md)에 정리했습니다. `windows-check` 실기 fixture는 개발 빌드에 남기되 portable 패키지에서는 해당 검증 entry를 제외합니다.
 
 `ldb/apps/desktop`의 main/preload/renderer 분리, native main 의존성, preload 번들링과 보안 경계를 참고했습니다. 현재 화면에 필요한 범위를 넘는 `@ldb/ui`·인증·OCR·상태 프레임워크 의존성은 가져오지 않았습니다.
 

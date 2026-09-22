@@ -1,67 +1,21 @@
-import { useEffect, useState } from 'react'
-import type { ProfileCommand, SpikeState } from '../../shared/contracts'
+import { useState } from 'react'
 import { ProfileEditor } from './ProfileEditor'
 import { CaptureHistory } from './CaptureHistory'
 import { Preferences } from './Preferences'
-import { userError } from './errors'
+import { useCaptureApp } from './useCaptureApp'
 
 export function App() {
-  const [state, setState] = useState<SpikeState | null>(null)
-  const [requestError, setRequestError] = useState<string | null>(null)
+  const { state, requestError, capture, updateProfiles, hideToTray, quit, openOutputFolder } =
+    useCaptureApp()
   const [profileSaving, setProfileSaving] = useState(false)
   const [previewing, setPreviewing] = useState(false)
   const [tab, setTab] = useState<'Profiles' | 'Captures' | 'Settings'>('Profiles')
-
-  useEffect(() => {
-    let active = true
-    let receivedUpdate = false
-    const unsubscribe = window.spike.onState((next) => {
-      receivedUpdate = true
-      if (active) setState(next)
-    })
-    window.spike.getState().then(
-      (initial) => {
-        if (active && !receivedUpdate) setState(initial)
-      },
-      (error: unknown) => {
-        if (active) setRequestError(userError(error))
-      }
-    )
-    return () => {
-      active = false
-      unsubscribe()
-    }
-  }, [])
-
-  async function capture() {
-    setRequestError(null)
-    try {
-      setState(await window.spike.captureNow())
-    } catch (error) {
-      setRequestError(userError(error))
-    }
-  }
 
   const lastCapture = state?.lastCapture
   const error = requestError ?? state?.error
   const activeProfile = state?.settings?.profiles.find(
     (profile) => profile.id === state.settings?.activeProfileId
   )
-
-  async function updateProfiles(command: ProfileCommand): Promise<SpikeState> {
-    const next = await window.spike.updateProfiles(command)
-    setState(next)
-    return next
-  }
-
-  async function action(run: () => Promise<void>) {
-    setRequestError(null)
-    try {
-      await run()
-    } catch (reason) {
-      setRequestError(userError(reason))
-    }
-  }
 
   return (
     <main>
@@ -74,14 +28,14 @@ export function App() {
           <button
             type="button"
             disabled={!state?.backgroundAvailable || state.busy || previewing}
-            onClick={() => void action(() => window.spike.minimizeToTray())}
+            onClick={() => void hideToTray()}
           >
             Hide to tray
           </button>
           <button
             type="button"
             disabled={state?.busy || profileSaving || previewing}
-            onClick={() => void action(() => window.spike.quit())}
+            onClick={() => void quit()}
           >
             Quit
           </button>
@@ -123,7 +77,7 @@ export function App() {
           <button
             type="button"
             disabled={!state?.outputDirectory}
-            onClick={() => void action(() => window.spike.openCaptureFolder())}
+            onClick={() => void openOutputFolder()}
           >
             Open output folder
           </button>
