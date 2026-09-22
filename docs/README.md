@@ -23,6 +23,7 @@
 
 | 기록                                                        | 내용                                                 |
 | ----------------------------------------------------------- | ---------------------------------------------------- |
+| [0.6.0 단축키 검증](shortcut-verification.md)               | 설정·UI 검사와 Windows 합성 키 검사의 범위·결과      |
 | [Windows capture spike](../spike/windows-capture/README.md) | 초기 구현 선택 이유와 Windows 실기 fixture 실행법    |
 | [Windows spike 결과](../spike/windows-capture/results.md)   | native 캡처, DPI, cursor 제외와 PrintScreen 근거     |
 | [Profile Editor 검증](profile-editor-verification.md)       | 숫자 ROI 편집과 설정 저장·복구 검사                  |
