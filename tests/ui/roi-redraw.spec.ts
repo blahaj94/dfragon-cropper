@@ -1,5 +1,5 @@
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { PNG } from 'pngjs'
@@ -53,12 +53,37 @@ async function expectExactPixels(capture: CaptureSummary) {
 
 test.afterEach(async () => {
   try {
-    await application?.close()
+    if (application && test.info().status !== test.info().expectedStatus) {
+      const windows = await application.evaluate(({ BrowserWindow, screen }) => ({
+        display: screen.getPrimaryDisplay(),
+        windows: BrowserWindow.getAllWindows().map((window) => ({
+          bounds: window.getBounds(),
+          contentBounds: window.getContentBounds(),
+          fullscreen: window.isFullScreen(),
+          visible: window.isVisible(),
+          focused: window.isFocused()
+        }))
+      }))
+      await writeFile(test.info().outputPath('window-state.json'), JSON.stringify(windows, null, 2))
+      for (const [index, page] of application.windows().entries()) {
+        if (!page.isClosed())
+          await page.screenshot({ path: test.info().outputPath(`fixture-window-${index}.png`) })
+      }
+    }
   } finally {
-    application = undefined
-    if (temporaryDirectory)
-      await rm(temporaryDirectory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
-    temporaryDirectory = undefined
+    try {
+      await application?.close()
+    } finally {
+      application = undefined
+      if (temporaryDirectory)
+        await rm(temporaryDirectory, {
+          recursive: true,
+          force: true,
+          maxRetries: 5,
+          retryDelay: 100
+        })
+      temporaryDirectory = undefined
+    }
   }
 })
 

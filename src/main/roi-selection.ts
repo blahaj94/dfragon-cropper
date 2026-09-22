@@ -104,6 +104,8 @@ export class RoiSelectionWindow {
       ...display.bounds,
       show: false,
       frame: false,
+      // A fullscreen selection needs no Windows resize border or its frame insets.
+      thickFrame: false,
       transparent: false,
       backgroundColor: '#10151c',
       fullscreen: process.platform !== 'darwin',
@@ -216,6 +218,9 @@ export class RoiSelectionWindow {
             // simpleFullscreen chooses the macOS fullscreen style; explicitly
             // enter it after showing, otherwise AppKit can keep the menu-bar inset.
             if (process.platform === 'darwin') overlay.setSimpleFullScreen(true)
+            // Electron's border-free Windows fullscreen path applies the display
+            // bounds directly. Reapply after showing, once native sizing has run.
+            else if (process.platform === 'win32') overlay.setFullScreen(true)
             overlay.focus()
           } catch {
             session.settle(null, new Error('The screen selection window could not be shown.'))
