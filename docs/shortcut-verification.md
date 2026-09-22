@@ -51,3 +51,5 @@ Windows CI의 합성 입력 결과는 **Windows 10 물리 키보드·전체화�
 이 결과를 바탕으로 앱과 사용 가이드에 [권한을 맞춰 실행하는 방법](user-guide.md#게임에서만-단축키가-안-될-때)을 추가했습니다. 자동 권한 상승이나 강제 관리자 실행은 하지 않습니다. 일반 권한 창만 사용한 기존 listener 검사가 관리자 권한 게임 호환성을 증명하지 못한다는 검증 한계도 유지합니다.
 
 CI에는 listener 콜백 횟수 외에 실제 제품의 백그라운드 GDI 캡처·ROI PNG 저장을 검사하는 product fixture를 추가했습니다. 이는 일반 foreground 창을 대상으로 하며 게임 권한 차이 검사를 대체하지 않습니다.
+
+[CI 실행 35733016003](https://github.com/blahaj94/dfragon-cropper/actions/runs/35733016003)에서 버튼 1회와 백그라운드 합성 PrintScreen 3회가 모두 저장됐습니다. 각 단축키 이벤트에서 별도 프로세스의 foreground 유지와 ROI PNG 2개를 확인했고, `completed`·`cleanupConfirmed`는 모두 `true`였습니다. 기존 단축키 15개 phase, 단위 테스트 159개(플랫폼 제외 3개), UI 23개(플랫폼 제외 1개), 정적 검사와 Windows portable 빌드도 통과했습니다.
