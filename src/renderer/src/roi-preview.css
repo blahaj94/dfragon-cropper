@@ -1,0 +1,22 @@
+.preview-target {
+  max-width: 280px;
+}
+.preview-instructions,
+.selection-shortcut-status {
+  color: #526375;
+}
+.roi-validation {
+  color: #a11212;
+}
+.preview-actions {
+  align-items: center;
+}
+.preview-actions .draft-notice {
+  margin: 0;
+}
+.roi-selector .selection-readout {
+  padding: 12px;
+  border: 1px solid #d4dee5;
+  border-radius: 6px;
+  background: white;
+}

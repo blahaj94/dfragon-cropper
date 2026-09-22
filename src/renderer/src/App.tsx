@@ -118,7 +118,7 @@ export function App() {
               !activeProfile?.regions.length
             }
           >
-            {state?.busy ? 'Capturing…' : 'Capture Now'}
+            {state?.busy && !previewing ? 'Capturing…' : 'Capture Now'}
           </button>
           <button
             type="button"
@@ -185,8 +185,10 @@ export function App() {
           settingsError={state?.settingsError ?? null}
           onCommand={updateProfiles}
           onSavingChange={setProfileSaving}
-          previewDisabled={!state || state.busy || state.mode === 'unsupported'}
+          previewDisabled={!state || state.busy || profileSaving || state.mode === 'unsupported'}
           onPreviewBusyChange={setPreviewing}
+          selectionShortcutStatus={state?.selectionShortcutStatus ?? 'Loading F12 status…'}
+          onSelectionComplete={() => setTab('Profiles')}
         />
 
         <section aria-labelledby="last-capture-heading" className="last-capture">
@@ -237,7 +239,7 @@ export function App() {
       >
         <Preferences
           settings={state?.settings ?? null}
-          blocked={!!state?.settingsError}
+          blocked={!!state?.settingsError || previewing}
           outputDirectory={state?.outputDirectory ?? ''}
           backgroundAvailable={state?.backgroundAvailable ?? false}
           onCommand={updateProfiles}

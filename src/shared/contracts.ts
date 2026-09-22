@@ -50,6 +50,18 @@ export interface PreviewFrame {
   dataUrl: string
 }
 
+export interface RoiSelection {
+  rectangle: Omit<Region, 'id'>
+  width: number
+  height: number
+  capturedAt: string
+}
+
+export interface RoiOverlayApi {
+  getFrame(): Promise<PreviewFrame>
+  finish(rectangle: Omit<Region, 'id'> | null): Promise<void>
+}
+
 export interface CaptureHistory {
   events: CaptureSummary[]
   skippedEntries: number
@@ -60,6 +72,7 @@ export interface SpikeState {
   platform: string
   mode: 'keyboard-hook' | 'global-shortcut' | 'fixture' | 'unsupported'
   triggerStatus: string
+  selectionShortcutStatus: string
   busy: boolean
   completed: number
   failed: number
@@ -77,7 +90,8 @@ export interface SpikeApi {
   captureNow(): Promise<SpikeState>
   onState(callback: (state: SpikeState) => void): () => void
   updateProfiles(command: ProfileCommand): Promise<SpikeState>
-  previewScreen(): Promise<PreviewFrame>
+  selectRoi(): Promise<RoiSelection | null>
+  onSelectRoiRequested(callback: () => void): () => void
   listCaptures(): Promise<CaptureHistory>
   readCaptureImage(eventId: string, regionId: number | null): Promise<string>
   openCaptureFolder(eventId?: string): Promise<void>
@@ -90,7 +104,10 @@ export const IPC = {
   captureNow: 'spike:capture-now',
   state: 'spike:state',
   updateProfiles: 'profiles:update',
-  previewScreen: 'capture:preview',
+  selectRoi: 'roi:select',
+  selectRoiRequested: 'roi:requested',
+  overlayFrame: 'roi-overlay:frame',
+  overlayFinish: 'roi-overlay:finish',
   listCaptures: 'capture:list',
   readCaptureImage: 'capture:image',
   openCaptureFolder: 'capture:open-folder',

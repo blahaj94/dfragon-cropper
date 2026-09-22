@@ -22,11 +22,12 @@ import {
   type CaptureTrigger
 } from './capture'
 import { listCaptures, readCaptureImage, resolveCaptureFolder } from './capture/history'
-import { IPC, type CaptureHistory, type PreviewFrame, type SpikeState } from '../shared/contracts'
+import { IPC, type CaptureHistory, type RoiSelection, type SpikeState } from '../shared/contracts'
 import { startPrintScreenListener } from './printscreen'
 import { loadProfileStore, ProfileFileConflictError, type ProfileStore } from './profiles'
 import { createLogger } from './logging'
 import { applicationIconPath } from './app-icon'
+import { RoiSelectionWindow } from './roi-selection'
 
 app.setName('DFragonCropper')
 const development = !app.isPackaged
@@ -55,6 +56,8 @@ let shuttingDown = false
 let allowQuit = false
 let previewHidden = false
 let deferredShow = false
+let selectionWindow: RoiSelectionWindow | null = null
+let nativeSelectionShortcut = false
 const operations = new Set<Promise<unknown>>()
 const state: SpikeState = {
   platform: process.platform,
@@ -66,6 +69,7 @@ const state: SpikeState = {
         ? 'global-shortcut'
         : 'keyboard-hook',
   triggerStatus: fixture ? 'Synthetic fixture; Windows capture is not exercised.' : 'Starting…',
+  selectionShortcutStatus: 'F12 selects an ROI while the app is focused.',
   busy: false,
   completed: 0,
   failed: 0,
@@ -175,34 +179,48 @@ async function capture(trigger: CaptureTrigger): Promise<SpikeState> {
   return state
 }
 
-async function previewScreen(): Promise<PreviewFrame> {
+async function selectRoi(): Promise<RoiSelection | null> {
   if (shuttingDown || state.busy) throw new Error('Wait for the current operation to finish.')
-  if (state.mode === 'unsupported') throw new Error('Screen preview requires Windows 10.')
+  if (state.mode === 'unsupported') throw new Error('Screen selection requires Windows 10.')
+  if (state.settingsError || !state.settings?.profiles.length)
+    throw new Error(state.settingsError || 'Create a profile before selecting an ROI.')
+  if (!selectionWindow) throw new Error('Screen selection is not available.')
   state.busy = true
   publish()
-  const restore = !fixture && window?.isVisible() && !window.isMinimized()
+  const restore = !!window?.isVisible() && !window.isMinimized()
+  let result: RoiSelection | null = null
+  previewHidden = true
   try {
     if (restore) {
-      previewHidden = true
       window?.hide()
       // Allow the desktop compositor to remove our window before taking the preview frame.
-      await new Promise((accept) => setTimeout(accept, 200))
+      if (!fixture) await new Promise((accept) => setTimeout(accept, 200))
     }
+    if (shuttingDown) return null
     const frame = fixture ? fixtureFrame() : capturePrimaryFrame()
-    return {
+    result = await selectionWindow.open({
       width: frame.width,
       height: frame.height,
       capturedAt: frame.capturedAt,
       dataUrl: `data:image/png;base64,${encodeFramePng(frame).toString('base64')}`
-    }
+    })
+    return result
+  } catch (error) {
+    logger.write('roi.selection-failed', { error: String(error) })
+    throw error
   } finally {
     previewHidden = false
-    const shouldShow = restore || deferredShow
+    const shouldShow = result !== null || restore || deferredShow
     deferredShow = false
     if (shouldShow && !shuttingDown) showWindow()
     state.busy = false
     publish()
   }
+}
+
+function requestRoiSelection(): void {
+  if (shuttingDown || state.busy || state.settingsError || !state.settings?.profiles.length) return
+  if (window && !window.isDestroyed()) window.webContents.send(IPC.selectRoiRequested)
 }
 
 async function history(): Promise<CaptureHistory> {
@@ -274,6 +292,8 @@ function installIpc(): void {
     assertTrustedSender(event, args, 1)
     return track(
       (async () => {
+        if (previewHidden)
+          throw new Error('Finish or cancel screen selection before saving changes.')
         if (!profileStore || state.settingsError)
           throw new Error(state.settingsError || 'Profiles are not available.')
         try {
@@ -292,9 +312,9 @@ function installIpc(): void {
       })()
     )
   })
-  ipcMain.handle(IPC.previewScreen, (event, ...args) => {
+  ipcMain.handle(IPC.selectRoi, (event, ...args) => {
     assertTrustedSender(event, args)
-    return track(previewScreen())
+    return track(selectRoi())
   })
   ipcMain.handle(IPC.listCaptures, (event, ...args) => {
     assertTrustedSender(event, args)
@@ -389,25 +409,46 @@ app
       } else app.quit()
     })
     window.on('closed', () => {
+      selectionWindow?.cancel()
       window = null
     })
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
     window.webContents.on('will-navigate', (event) => event.preventDefault())
     window.webContents.on('will-attach-webview', (event) => event.preventDefault())
+    window.webContents.on('render-process-gone', () => selectionWindow?.cancel())
+    window.webContents.on('before-input-event', (event, input) => {
+      if (!nativeSelectionShortcut && input.key === 'F12') {
+        event.preventDefault()
+        if (input.type === 'keyDown' && !input.isAutoRepeat) requestRoiSelection()
+      }
+    })
     window.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) =>
       callback(false)
     )
     window.webContents.session.setPermissionCheckHandler(() => false)
     installIpc()
+    selectionWindow = new RoiSelectionWindow({
+      documentUrl: () => documentUrl,
+      preload: join(__dirname, '../preload/index.js'),
+      icon: applicationIconPath()
+    })
     installTray()
     if (state.mode === 'keyboard-hook') {
       try {
-        const listener = startPrintScreenListener(() => void track(capture('printscreen')))
+        const listener = startPrintScreenListener(
+          () => void track(capture('printscreen')),
+          requestRoiSelection
+        )
         stopPrintScreen = () => listener.stop()
+        nativeSelectionShortcut = true
+        state.selectionShortcutStatus =
+          'F12 selects an ROI, including while the app is in the tray.'
         state.triggerStatus =
           'PrintScreen listener active. Capture continues while the app is in the tray.'
       } catch (error) {
         state.triggerStatus = 'PrintScreen listener failed. Capture Now remains available.'
+        state.selectionShortcutStatus =
+          'Global F12 is unavailable. Focus the app and press F12, or use Select ROI (F12).'
         state.error = error instanceof Error ? error.message : String(error)
       }
     } else if (state.mode === 'global-shortcut') {
@@ -418,7 +459,10 @@ app
       state.triggerStatus = registered
         ? 'Electron globalShortcut registered. Default PrintScreen behavior requires the Windows probe.'
         : 'PrintScreen registration failed. Capture Now remains available.'
-    } else if (!fixture) state.triggerStatus = 'Windows 10 is required for native capture.'
+    } else if (!fixture) {
+      state.triggerStatus = 'Windows 10 is required for native capture.'
+      state.selectionShortcutStatus = 'Screen selection requires Windows 10.'
+    }
     const devUrl = process.env.ELECTRON_RENDERER_URL
     if (development && devUrl) {
       documentUrl = new URL(devUrl).href
@@ -441,6 +485,9 @@ app.on('before-quit', (event) => {
   event.preventDefault()
   if (shuttingDown) return
   shuttingDown = true
+  // A selection is a tracked promise waiting for user input. Settle and dispose it
+  // before awaiting operations so Quit cannot deadlock behind a frozen overlay.
+  selectionWindow?.cancel()
   // Finish the current PNG/config write before closing; new requests are now rejected.
   void Promise.allSettled([...operations]).then(async () => {
     logger.write('app.stopped')

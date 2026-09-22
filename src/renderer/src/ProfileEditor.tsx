@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import type { ProfileCommand, ProfileSettings, Region, SpikeState } from '../../shared/contracts'
-import { ScreenPreview } from './ScreenPreview'
+import { ScreenPreview, type PreviewDraft } from './ScreenPreview'
 import { userError } from './errors'
 
 type Rectangle = Omit<Region, 'id'>
@@ -64,7 +64,9 @@ export function ProfileEditor({
   onCommand,
   onSavingChange,
   previewDisabled,
-  onPreviewBusyChange
+  onPreviewBusyChange,
+  selectionShortcutStatus,
+  onSelectionComplete
 }: {
   settings: ProfileSettings | null
   settingsError: string | null
@@ -72,6 +74,8 @@ export function ProfileEditor({
   onSavingChange: (saving: boolean) => void
   previewDisabled: boolean
   onPreviewBusyChange: (busy: boolean) => void
+  selectionShortcutStatus: string
+  onSelectionComplete: () => void
 }) {
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [newName, setNewName] = useState('')
@@ -79,12 +83,23 @@ export function ProfileEditor({
   // Drafts are separate from pushed capture state and survive profile selection changes.
   const [rectangles, setRectangles] = useState<Record<string, RectangleDraft>>({})
   const [saving, setSaving] = useState(false)
+  const [selecting, setSelecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState('')
   const selected =
     settings?.profiles.find((profile) => profile.id === selectedId) ??
     settings?.profiles.find((profile) => profile.id === settings.activeProfileId) ??
     settings?.profiles[0]
+  const previewDrafts: Record<number, PreviewDraft> = {}
+  for (const region of selected?.regions ?? []) {
+    const draft = rectangles[`${selected!.id}:${region.id}`] ?? draftFrom(region)
+    const dirty = fields.some((field) => draft[field] !== String(region[field]))
+    try {
+      previewDrafts[region.id] = { rectangle: rectangleFrom(draft), dirty, error: null }
+    } catch (reason) {
+      previewDrafts[region.id] = { rectangle: null, dirty, error: userError(reason) }
+    }
+  }
 
   function discardRectangle(key: string) {
     setRectangles((current) => {
@@ -99,7 +114,7 @@ export function ProfileEditor({
     message: string,
     onSaved?: (state: SpikeState) => void
   ) {
-    if (settingsError || saving) return false
+    if (settingsError || saving || selecting) return false
     setError(null)
     setNotice('')
     setSaving(true)
@@ -132,6 +147,21 @@ export function ProfileEditor({
     )
   }
 
+  function saveRegion(region: Region) {
+    if (!selected) return Promise.resolve(false)
+    const key = `${selected.id}:${region.id}`
+    return save(
+      () => ({
+        type: 'update-region',
+        profileId: selected.id,
+        regionId: region.id,
+        rectangle: rectangleFrom(rectangles[key] ?? draftFrom(region))
+      }),
+      `ROI #${region.id} saved.`,
+      () => discardRectangle(key)
+    )
+  }
+
   return (
     <section aria-labelledby="profile-editor-heading" className="profile-editor">
       <h2 id="profile-editor-heading">Profile Editor</h2>
@@ -144,7 +174,7 @@ export function ProfileEditor({
       {error && !settingsError && <p role="alert">{error}</p>}
       {notice && !settingsError && <p role="status">{notice}</p>}
       {settings && (
-        <fieldset className="editor-controls" disabled={saving || !!settingsError}>
+        <fieldset className="editor-controls" disabled={saving || selecting || !!settingsError}>
           <legend className="visually-hidden">Profile settings</legend>
           <form onSubmit={createProfile} noValidate className="actions">
             <label>
@@ -270,8 +300,42 @@ export function ProfileEditor({
                 profileId={selected.id}
                 profileName={selected.name}
                 regions={selected.regions}
+                drafts={previewDrafts}
                 disabled={previewDisabled || saving || !!settingsError}
-                onBusyChange={onPreviewBusyChange}
+                shortcutStatus={selectionShortcutStatus}
+                isTargetAvailable={(profileId, regionId) => {
+                  if (settingsError) return false
+                  const profile = settings.profiles.find((profile) => profile.id === profileId)
+                  return (
+                    !!profile &&
+                    (regionId === null || profile.regions.some((region) => region.id === regionId))
+                  )
+                }}
+                onBusyChange={(busy) => {
+                  setSelecting(busy)
+                  onPreviewBusyChange(busy)
+                }}
+                onSelectionComplete={(profileId) => {
+                  setSelectedId(profileId)
+                  onSelectionComplete()
+                }}
+                onRedraw={(profileId, regionId, rectangle) => {
+                  if (
+                    !settings.profiles
+                      .find((profile) => profile.id === profileId)
+                      ?.regions.some((region) => region.id === regionId)
+                  )
+                    return
+                  setRectangles((current) => ({
+                    ...current,
+                    [`${profileId}:${regionId}`]: draftFrom(rectangle)
+                  }))
+                }}
+                onSave={(regionId) => {
+                  const region = selected.regions.find((region) => region.id === regionId)
+                  return region ? saveRegion(region) : Promise.resolve(false)
+                }}
+                onDiscard={(regionId) => discardRectangle(`${selected.id}:${regionId}`)}
                 onAdd={(rectangle) =>
                   save(
                     { type: 'add-region', profileId: selected.id, rectangle },
@@ -291,16 +355,7 @@ export function ProfileEditor({
                     noValidate
                     onSubmit={(event) => {
                       event.preventDefault()
-                      void save(
-                        () => ({
-                          type: 'update-region',
-                          profileId: selected.id,
-                          regionId: region.id,
-                          rectangle: rectangleFrom(draft)
-                        }),
-                        `ROI #${region.id} saved.`,
-                        () => discardRectangle(key)
-                      )
+                      void saveRegion(region)
                     }}
                   >
                     <fieldset className="region">
@@ -310,8 +365,11 @@ export function ProfileEditor({
                         onChange={(next) => setRectangles({ ...rectangles, [key]: next })}
                       />
                       {dirty && <p className="draft-notice">Unsaved changes</p>}
+                      {previewDrafts[region.id].error && (
+                        <p className="roi-validation">{previewDrafts[region.id].error}</p>
+                      )}
                       <div className="actions">
-                        <button type="submit" disabled={!dirty}>
+                        <button type="submit" disabled={!dirty || !!previewDrafts[region.id].error}>
                           Save ROI
                         </button>
                         <button

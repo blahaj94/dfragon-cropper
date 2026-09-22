@@ -199,38 +199,6 @@ dd {
 .section-heading h2 {
   margin-top: 0;
 }
-.selection-surface {
-  position: relative;
-  touch-action: none;
-  user-select: none;
-  cursor: crosshair;
-  overflow: hidden;
-}
-.selection-surface img {
-  display: block;
-  width: 100%;
-  height: auto;
-  image-rendering: pixelated;
-  pointer-events: none;
-}
-.selection-surface svg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-}
-.saved-region {
-  fill: #254e691a;
-  stroke: #355570;
-  stroke-width: 1;
-  stroke-dasharray: 4 3;
-}
-.drawn-region {
-  fill: #00b8d933;
-  stroke: #00c9ee;
-  stroke-width: 2;
-}
 .selection-readout {
   font-variant-numeric: tabular-nums;
 }
@@ -241,19 +209,6 @@ dd {
 }
 .history-selectors select {
   width: 100%;
-}
-.history-image {
-  padding: 12px;
-  background: #edf1f5;
-  border-radius: 8px;
-  overflow: auto;
-}
-.history-image img {
-  display: block;
-  max-width: 100%;
-  max-height: 600px;
-  object-fit: contain;
-  image-rendering: pixelated;
 }
 .checkbox {
   flex-direction: row;

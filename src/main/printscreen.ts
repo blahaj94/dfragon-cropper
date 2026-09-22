@@ -2,6 +2,7 @@ import koffi from 'koffi'
 
 const WH_KEYBOARD_LL = 13
 const VK_SNAPSHOT = 0x2c
+const VK_F12 = 0x7b
 const WM_KEYDOWN = 0x0100
 const WM_KEYUP = 0x0101
 const WM_SYSKEYDOWN = 0x0104
@@ -12,7 +13,10 @@ export interface PrintScreenListener {
 }
 
 /** Start after Electron is ready so the installing thread has its Windows message loop. */
-export function startPrintScreenListener(onPress: () => void): PrintScreenListener {
+export function startPrintScreenListener(
+  onPress: () => void,
+  onSelectRoi?: () => void
+): PrintScreenListener {
   if (process.platform !== 'win32') {
     throw new Error('The PrintScreen keyboard listener requires Windows.')
   }
@@ -41,31 +45,50 @@ export function startPrintScreenListener(onPress: () => void): PrintScreenListen
   const getModuleHandle = kernel32.func('__stdcall', 'GetModuleHandleW', 'void *', ['str16'])
   const getLastError = kernel32.func('__stdcall', 'GetLastError', 'uint32_t', [])
   let active = true
-  let down = false
+  const down = new Set<number>()
   let released = false
   const pending = new Set<NodeJS.Immediate>()
 
   const callback = koffi.register(
     (code: number, message: number | bigint, key: bigint | null): number | bigint => {
+      let consumeSelectionKey = false
       try {
         // Inspect only the first DWORD (vkCode); neither key contents nor other keys are stored.
-        if (active && code === 0 && key !== null && koffi.decode.uint32(key) === VK_SNAPSHOT) {
+        if (active && code === 0 && key !== null) {
+          const virtualKey = koffi.decode.uint32(key)
+          const notify =
+            virtualKey === VK_SNAPSHOT ? onPress : virtualKey === VK_F12 ? onSelectRoi : undefined
           const event = Number(message)
-          if (event === WM_KEYUP || event === WM_SYSKEYUP) {
-            down = false
-          } else if ((event === WM_KEYDOWN || event === WM_SYSKEYDOWN) && !down) {
-            down = true
+          // F12 is the explicit app selection shortcut. Consuming its key pair
+          // prevents the foreground app from changing the screen before capture.
+          // Legacy listeners without this callback keep forwarding F12 unchanged.
+          consumeSelectionKey =
+            virtualKey === VK_F12 &&
+            !!onSelectRoi &&
+            (event === WM_KEYDOWN ||
+              event === WM_SYSKEYDOWN ||
+              event === WM_KEYUP ||
+              event === WM_SYSKEYUP)
+          if (notify && (event === WM_KEYUP || event === WM_SYSKEYUP)) {
+            down.delete(virtualKey)
+          } else if (
+            notify &&
+            (event === WM_KEYDOWN || event === WM_SYSKEYDOWN) &&
+            !down.has(virtualKey)
+          ) {
+            down.add(virtualKey)
             const notification = setImmediate(() => {
               pending.delete(notification)
-              if (active) onPress()
+              if (active) notify()
             })
             pending.add(notification)
           }
         }
       } catch {
-        // Decoding/scheduling failure must never suppress the original Windows key event.
+        // Decoding/scheduling failure must never suppress the Windows PrintScreen event.
       }
-      // Forward negative codes, unrelated keys and PrintScreen alike, returning the native result.
+      if (consumeSelectionKey) return 1
+      // PrintScreen, negative codes and unrelated keys always return the native next-hook result.
       return nextHook(null, code, message, key) as number | bigint
     },
     koffi.pointer(hookProcedure)
@@ -87,7 +110,7 @@ export function startPrintScreenListener(onPress: () => void): PrintScreenListen
     stop(): void {
       if (released) return
       active = false
-      down = false
+      down.clear()
       for (const notification of pending) clearImmediate(notification)
       pending.clear()
       if (!unhook(handle)) {

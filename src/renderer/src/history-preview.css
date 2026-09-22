@@ -1,0 +1,53 @@
+.capture-image-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.capture-image-controls button[aria-pressed='true'] {
+  border-color: #247c96;
+  background: #e5f3f6;
+  font-weight: 600;
+}
+
+.capture-image-controls span {
+  margin-inline-start: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.capture-image-help {
+  color: #526375;
+  font-size: 0.9rem;
+}
+
+.capture-image-viewport {
+  max-height: min(65vh, 600px);
+  max-width: 100%;
+  overflow: auto;
+  background: #edf1f5;
+  border: 1px solid #c8d1da;
+  border-radius: 8px;
+}
+
+.capture-image-viewport:focus-visible {
+  outline: 3px solid #247c96;
+  outline-offset: 2px;
+}
+
+.capture-image-viewport img {
+  display: block;
+  width: auto;
+  height: auto;
+  image-rendering: pixelated;
+}
+
+.capture-image-viewport--fit img {
+  max-width: 100%;
+  max-height: min(65vh, 600px);
+}
+
+.capture-image-viewport--actual img {
+  max-width: none;
+  max-height: none;
+}

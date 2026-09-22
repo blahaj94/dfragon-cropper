@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { CaptureHistory as History } from '../../shared/contracts'
+import { CaptureImagePreview } from './CaptureImagePreview'
 import { userError } from './errors'
 
 export function CaptureHistory({
@@ -16,10 +17,11 @@ export function CaptureHistory({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [image, setImage] = useState<{
+    key: string
     url: string | null
     error: string | null
     loading: boolean
-  }>({ url: null, error: null, loading: false })
+  }>({ key: '', url: null, error: null, loading: false })
   const selected =
     history?.events.find((event) => event.eventId === selectedId) ?? history?.events[0]
   const value =
@@ -29,6 +31,10 @@ export function CaptureHistory({
         ? 'original'
         : String(selected?.regions[0]?.id ?? '')
   const eventId = selected?.eventId
+  const imageKey = `${eventId ?? ''}:${value}:${revision}`
+  // Effects run after rendering. Match the result to this selection during render
+  // so an earlier image can never appear under the newly selected asset's label.
+  const currentImage = image.key === imageKey ? image : null
 
   useEffect(() => {
     if (!visible) return
@@ -57,19 +63,19 @@ export function CaptureHistory({
   useEffect(() => {
     if (!visible || !eventId || !value) return
     let active = true
-    setImage({ url: null, error: null, loading: true })
+    setImage({ key: imageKey, url: null, error: null, loading: true })
     window.spike.readCaptureImage(eventId, value === 'original' ? null : Number(value)).then(
       (url) => {
-        if (active) setImage({ url, error: null, loading: false })
+        if (active) setImage({ key: imageKey, url, error: null, loading: false })
       },
       (reason) => {
-        if (active) setImage({ url: null, error: userError(reason), loading: false })
+        if (active) setImage({ key: imageKey, url: null, error: userError(reason), loading: false })
       }
     )
     return () => {
       active = false
     }
-  }, [visible, eventId, value, revision])
+  }, [visible, eventId, value, imageKey])
 
   return (
     <section aria-labelledby="history-heading">
@@ -148,18 +154,15 @@ export function CaptureHistory({
           {selected.originalSaved === false && (
             <p>Original image was not saved for this capture.</p>
           )}
-          {image.loading && <p role="status">Loading image…</p>}
-          {image.error && <p role="alert">Could not open the capture image. {image.error}</p>}
-          {image.url && (
-            <div className="history-image">
-              <img
-                src={image.url}
-                alt={value === 'original' ? 'Original capture' : `ROI #${value} capture`}
-                data-testid="history-image"
-                draggable={false}
-              />
-            </div>
+          {(!currentImage || currentImage.loading) && <p role="status">Loading image…</p>}
+          {currentImage?.error && (
+            <p role="alert">Could not open the capture image. {currentImage.error}</p>
           )}
+          <CaptureImagePreview
+            imageKey={imageKey}
+            url={currentImage?.url ?? null}
+            alt={value === 'original' ? 'Original capture' : `ROI #${value} capture`}
+          />
         </>
       )}
     </section>

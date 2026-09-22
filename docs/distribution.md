@@ -11,14 +11,14 @@ Windows x64에서 EXE를 쓰기 가능한 폴더에 두고 실행하세요. 설�
 각 릴리스에는 `SHA256SUMS.txt`도 포함됩니다. 다운로드한 EXE의 SHA-256을 PowerShell로 계산해 해당 파일의 값과 비교할 수 있습니다.
 
 ```powershell
-Get-FileHash .\DFragonCropper-0.3.1-x64-portable.exe -Algorithm SHA256
+Get-FileHash .\DFragonCropper-0.4.0-x64-portable.exe -Algorithm SHA256
 ```
 
 ## 새 버전으로 업데이트
 
 1. 앱이나 트레이 메뉴에서 **Quit**를 눌러 완전히 종료합니다.
 2. 기존 `config.json`, `config.json.bak`, `captures/`를 보존한 채 새 EXE를 **같은 폴더**에 둡니다. 새 EXE를 다른 폴더에서 실행하면 그 폴더에 별도의 설정과 캡처를 사용합니다.
-3. 새 EXE를 실행해 활성 프로필과 저장된 ROI를 확인합니다. 0.3.0에서 0.3.1로는 설정 형식이 바뀌지 않습니다.
+3. 새 EXE를 실행해 활성 프로필과 저장된 ROI를 확인합니다. 0.3.x에서 0.4.0으로는 설정 형식이 바뀌지 않습니다.
 4. 새 버전이 정상 동작하면 이전 버전의 EXE를 별도로 보관하거나 삭제할 수 있습니다. 설정·캡처 파일을 함께 지우지 마세요.
 
 자동 업데이트는 제공하지 않습니다. 설정을 복구해야 하면 [백업 복구 안내](configuration.md#백업으로-수동-복구)를 참고하세요.
@@ -44,8 +44,8 @@ Get-FileHash .\DFragonCropper-0.3.1-x64-portable.exe -Algorithm SHA256
 3. 발행할 커밋에 패키지 버전과 같은 태그를 붙이고 push합니다.
 
 ```sh
-git tag v0.3.1
-git push origin v0.3.1
+git tag v0.4.0
+git push origin v0.4.0
 ```
 
 태그와 패키지 버전이 다르거나 릴리스 노트가 없으면 배포가 실패합니다. 0.x 버전은 미리보기 릴리스로 표시합니다. 코드서명과 자동 업데이트는 이 워크플로에 포함하지 않습니다.
