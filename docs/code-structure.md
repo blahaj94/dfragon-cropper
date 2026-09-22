@@ -4,6 +4,43 @@
 
 0.4.0 이후 구조 정리는 제품 동작과 저장 형식을 유지하면서 서로 다른 변경 이유를 가진 코드를 분리합니다. `src/main/index.ts`에는 앱 수명과 모듈 연결을 남깁니다. IPC는 요청의 발신 창·프레임·URL과 인자 개수를 확인하고, 값의 의미와 업무 규칙은 해당 도메인이 검사합니다.
 
+## 아키텍처
+
+화면은 React로 구성하고, Windows 키 감지·화면 캡처·파일 저장은 Electron의 Main 프로세스에서 처리합니다. Renderer는 제한된 Preload API를 통해서만 요청하며 Main이 요청과 데이터를 검증합니다.
+
+```mermaid
+flowchart TB
+    UI["React 화면<br/>Profiles · Captures · Ground Truth · Settings"]
+    Bridge["Preload<br/>허용된 API만 노출"]
+
+    subgraph Main["Electron Main 프로세스"]
+        Hook["PrintScreen 감지<br/>Win32 pass-through hook"]
+        App["캡처 조율 · 프로필 · 이력<br/>트레이 · 단일 인스턴스"]
+        Frame["Win32 GDI / Koffi<br/>주 모니터 한 프레임"]
+        Crop["ROI 픽셀 행 복사<br/>Lossless PNG 인코딩"]
+        Answers["이미지별 정답<br/>검증 · 충돌 검사 · 안전한 저장"]
+        Hook -->|"비동기 알림"| App
+        App -->|"저장된 프로필·옵션 고정"| Frame
+        Frame --> Crop
+    end
+
+    UI <-->|"요청 · 상태"| Bridge
+    Bridge <-->|"검증된 IPC"| App
+    Bridge <-->|"검증된 IPC"| Answers
+    Hook -->|"키 전달"| OS["Windows 기본 키 처리"]
+    App <--> Config["config.json + 백업"]
+    Crop --> Files["로컬 이벤트 폴더<br/>ROI PNG · 선택 원본 · metadata"]
+    Files -->|"이력 조회"| App
+    Answers <-->|"metadata 조회·저장"| Files
+
+    classDef screen fill:#eaf1ff,stroke:#6c8cba,color:#18304c
+    classDef capture fill:#e8f7f0,stroke:#459577,color:#173d30
+    classDef storage fill:#fff4df,stroke:#c39240,color:#503913
+    class UI,Bridge screen
+    class Hook,App,Frame,Crop,Answers capture
+    class Config,Files storage
+```
+
 ## Main
 
 | 모듈                                                | 책임                                                                        |
