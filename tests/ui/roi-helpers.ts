@@ -22,6 +22,18 @@ export async function openRoiOverlay(application: ElectronApplication, page: Pag
         .evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)
     )
     .toBe(true)
+  // Renderer DOM can be ready before loadURL's main-process continuation shows
+  // the native window. Wait for presentation before testing or dragging it.
+  await expect
+    .poll(() =>
+      application.evaluate(({ BrowserWindow }) => {
+        const selection = BrowserWindow.getAllWindows().find((window) =>
+          window.webContents.getURL().endsWith('#roi-overlay')
+        )
+        return !!selection?.isVisible() && selection.isFocused()
+      })
+    )
+    .toBe(true)
   return overlay
 }
 

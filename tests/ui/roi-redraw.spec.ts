@@ -214,25 +214,23 @@ test('F12 opens a separate frozen full-screen overlay with a bounded magnifier a
       window.webContents.getURL().endsWith('#roi-overlay')
     )!
     return {
-      bounds: selection.getBounds(),
       display: screen.getPrimaryDisplay().bounds,
       alwaysOnTop: selection.isAlwaysOnTop(),
       count: BrowserWindow.getAllWindows().length
     }
   })
-  expect(windows.bounds).toEqual(windows.display)
-  expect(windows.alwaysOnTop).toBe(true)
-  expect(windows.count).toBe(2)
+  // Showing fullscreen is a native transition; require exact coverage once it settles.
   await expect
     .poll(() =>
-      application!.evaluate(({ BrowserWindow }) => {
-        const overlayWindow = BrowserWindow.getAllWindows().find((window) =>
-          window.webContents.getURL().endsWith('#roi-overlay')
-        )
-        return !!overlayWindow?.isVisible() && overlayWindow.isFocused()
-      })
+      application!.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()
+          .find((window) => window.webContents.getURL().endsWith('#roi-overlay'))!
+          .getBounds()
+      )
     )
-    .toBe(true)
+    .toEqual(windows.display)
+  expect(windows.alwaysOnTop).toBe(true)
+  expect(windows.count).toBe(2)
   await overlay.waitForFunction(() => document.hasFocus())
   const bounds = (await image.boundingBox())!
   const restoreCursor = await placeNativeCursor(application!, {
