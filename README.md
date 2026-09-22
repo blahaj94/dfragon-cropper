@@ -8,9 +8,9 @@
 
 DFragonCropper는 Windows 화면에서 반복해서 저장할 영역을 미리 지정해 두는 캡처 앱입니다. 영역들을 프로필로 묶고 PrintScreen을 누르면, 주 모니터의 **동일한 한 프레임**에서 각 영역을 잘라 원래 픽셀 그대로 저장합니다.
 
-**Windows 10 x64 · Portable · 로컬 저장 · 0.4.0 미리보기**
+**Windows 10 x64 · Portable · 로컬 저장 · 0.5.0 미리보기**
 
-현재 개발 소스에는 캡처 결과 이미지마다 캐릭터 닉네임을 작성하는 **Ground Truth** 탭이 추가되었습니다. 오래된 순으로 결과를 훑고 정답을 각 `metadata.json`에 저장합니다. 사용 방법은 [이미지별 정답 작성](docs/ground-truth.md)을 참고하세요. 이 기능은 기존 0.4.0 릴리스 실행 파일에는 포함되지 않습니다.
+0.5.0의 **Ground Truth** 탭에서 캡처 결과 이미지마다 캐릭터 닉네임을 작성할 수 있습니다. 오래된 순으로 결과를 훑고 정답을 각 `metadata.json`에 저장합니다. 사용 방법은 [이미지별 정답 작성](docs/ground-truth.md)을 참고하세요.
 
 [Windows 다운로드](https://github.com/blahaj94/dfragon-cropper/releases) · [빠른 시작](#빠른-시작) · [아키텍처](#아키텍처) · [사용 가이드](docs/user-guide.md)
 
@@ -29,16 +29,18 @@ _제품 동작을 설명하는 개념도입니다. 실제 앱 스크린샷이 �
 | **한 프레임, 여러 PNG** | 한 번 얻은 원본에서 모든 ROI를 만듭니다. 확대·축소, 필터, JPEG 변환을 하지 않습니다.                        |
 | **백그라운드 캡처**     | 앱을 트레이에 둔 채 PrintScreen으로 캡처합니다. Windows의 기본 키 처리를 가로채지 않습니다.                 |
 | **캡처 이력 확인**      | 최근 100개 이벤트의 원본·ROI를 화면 맞춤 또는 100% 크기로 확인합니다. 오래된 파일은 자동 삭제하지 않습니다. |
+| **이미지별 정답 작성**  | 오래된 캡처부터 이미지 옆에 닉네임을 입력하고 한 장씩 저장합니다. 정답이 있는 이미지를 숨길 수 있습니다.    |
 | **내 PC에 보관**        | PNG와 설정을 로컬에 저장합니다. 원본 전체 화면의 저장 여부도 선택할 수 있습니다.                            |
 
 ## 빠른 시작
 
-[릴리스 페이지](https://github.com/blahaj94/dfragon-cropper/releases)에서 `DFragonCropper-0.4.0-x64-portable.exe`를 받아 쓰기 가능한 폴더에 두고 실행하세요. 설치 과정 없이 사용할 수 있는 코드서명되지 않은 미리보기 빌드입니다. 다운로드 확인과 업데이트 방법은 [배포 안내](docs/distribution.md)를 참고하세요.
+[릴리스 페이지](https://github.com/blahaj94/dfragon-cropper/releases/tag/v0.5.0)에서 `DFragonCropper-0.5.0-x64-portable.exe`를 받아 쓰기 가능한 폴더에 두고 실행하세요. 설치 과정 없이 사용할 수 있는 코드서명되지 않은 미리보기 빌드입니다. 다운로드 확인과 업데이트 방법은 [배포 안내](docs/distribution.md)를 참고하세요.
 
 1. **영역 지정** — **F12** 또는 `Select ROI (F12)`를 누릅니다. 전체화면에 표시된 정지 화면에서 확대경을 보며 드래그하면 편집창으로 돌아옵니다. `Add drawn ROI`로 추가하거나 `Edit drawn ROI`로 기존 영역에 적용한 뒤 저장합니다. Esc는 선택을 취소합니다.
 2. **프로필 선택** — 사용할 프로필에서 `Use for captures`를 누릅니다. 편집 중인 입력은 명시적으로 저장해야 캡처에 반영됩니다.
 3. **캡처** — 원하는 화면을 띄우고 **PrintScreen**을 누릅니다. `Capture Now` 버튼으로도 캡처할 수 있습니다.
 4. **결과 확인** — `Captures`에서 `Refresh history`를 누르거나 `Open output folder`로 PNG 파일을 확인합니다.
+5. **정답 작성** — 캡처를 모은 뒤 `Ground Truth`에서 각 이미지의 닉네임을 입력하고 `Save`를 누릅니다. Enter는 저장 후 다음 미작성 이미지로 이동합니다.
 
 처음 실행하면 예시 ROI 두 개가 있는 `Default` 프로필로 시작합니다. 원하는 영역으로 바꾸어 사용하세요. ROI는 주 모니터 왼쪽 위를 기준으로 한 **물리 픽셀 좌표**이며, 화면 해상도가 달라지면 미리보기를 새로 가져와 확인해야 합니다.
 
@@ -57,7 +59,7 @@ captures/
     ├── original.png     # 원본 저장 옵션이 켜져 있을 때
     ├── 001.png          # ROI ID 1의 저장 영역
     ├── 002.png          # ROI ID 2의 저장 영역
-    └── metadata.json    # 프로필, 좌표, 캡처 정보
+    └── metadata.json    # 프로필, 좌표, 캡처 정보와 이미지별 정답
 ```
 
 프로필과 설정은 실행 파일 옆 `config.json`에 보관됩니다. 저장 위치, 백업과 복구 방법은 [설정·데이터 안내](docs/configuration.md)를 참고하세요.
@@ -68,7 +70,7 @@ captures/
 
 ```mermaid
 flowchart TB
-    UI["React 화면<br/>Profiles · Captures · Settings"]
+    UI["React 화면<br/>Profiles · Captures · Ground Truth · Settings"]
     Bridge["Preload<br/>허용된 API만 노출"]
 
     subgraph Main["Electron Main 프로세스"]
@@ -76,6 +78,7 @@ flowchart TB
         App["캡처 조율 · 프로필 · 이력<br/>트레이 · 단일 인스턴스"]
         Frame["Win32 GDI / Koffi<br/>주 모니터 한 프레임"]
         Crop["ROI 픽셀 행 복사<br/>Lossless PNG 인코딩"]
+        Answers["이미지별 정답<br/>검증 · 충돌 검사 · 안전한 저장"]
         Hook -->|"비동기 알림"| App
         App -->|"저장된 프로필·옵션 고정"| Frame
         Frame --> Crop
@@ -83,16 +86,18 @@ flowchart TB
 
     UI <-->|"요청 · 상태"| Bridge
     Bridge <-->|"검증된 IPC"| App
+    Bridge <-->|"검증된 IPC"| Answers
     Hook -->|"키 전달"| OS["Windows 기본 키 처리"]
     App <--> Config["config.json + 백업"]
     Crop --> Files["로컬 이벤트 폴더<br/>ROI PNG · 선택 원본 · metadata"]
     Files -->|"이력 조회"| App
+    Answers <-->|"metadata 조회·저장"| Files
 
     classDef screen fill:#eaf1ff,stroke:#6c8cba,color:#18304c
     classDef capture fill:#e8f7f0,stroke:#459577,color:#173d30
     classDef storage fill:#fff4df,stroke:#c39240,color:#503913
     class UI,Bridge screen
-    class Hook,App,Frame,Crop capture
+    class Hook,App,Frame,Crop,Answers capture
     class Config,Files storage
 ```
 
@@ -108,10 +113,11 @@ flowchart TB
 
 ## 더 알아보기
 
-| 문서                                      | 내용                                          |
-| ----------------------------------------- | --------------------------------------------- |
-| [사용 가이드](docs/user-guide.md)         | 프로필, ROI 편집, 캡처 이력과 트레이 사용     |
-| [설정·데이터 안내](docs/configuration.md) | 저장 위치, 설정 이관, 백업과 복구             |
-| [다운로드·업데이트](docs/distribution.md) | 실행 파일, 체크섬과 새 버전으로 교체하는 방법 |
-| [개발 가이드](docs/development.md)        | 개발 환경, 빌드, 코드 구조와 검증             |
-| [문서 목록](docs/README.md)               | 현재 가이드와 단계별 검증 기록                |
+| 문서                                       | 내용                                          |
+| ------------------------------------------ | --------------------------------------------- |
+| [사용 가이드](docs/user-guide.md)          | 프로필, ROI 편집, 캡처 이력과 트레이 사용     |
+| [이미지별 정답 작성](docs/ground-truth.md) | 닉네임 입력, 연속 목록과 필터, 정답 저장      |
+| [설정·데이터 안내](docs/configuration.md)  | 저장 위치, 설정 이관, 백업과 복구             |
+| [다운로드·업데이트](docs/distribution.md)  | 실행 파일, 체크섬과 새 버전으로 교체하는 방법 |
+| [개발 가이드](docs/development.md)         | 개발 환경, 빌드, 코드 구조와 검증             |
+| [문서 목록](docs/README.md)                | 현재 가이드와 단계별 검증 기록                |
