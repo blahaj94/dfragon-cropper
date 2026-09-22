@@ -95,6 +95,23 @@ jobs:
             if (Test-Path -LiteralPath $report) { Get-Content -LiteralPath $report -Raw }
           }
 
+      # Actual GDI/PNG product pipeline, with a separate foreground process and synthetic keys.
+      # This does not exercise a higher-integrity game or a physical Windows 10 keyboard.
+      - name: Test background product capture with synthetic PrintScreen
+        timeout-minutes: 2
+        run: |
+          $report = Join-Path $env:RUNNER_TEMP 'dfragon-product-flow.json'
+          try {
+            node spike/windows-capture/product-flow-probe.cjs --output $report --press-count 3
+            if ($LASTEXITCODE -ne 0) { throw 'Background product capture probe failed.' }
+            $result = Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
+            if (!$result.completed -or !$result.cleanupConfirmed) {
+              throw 'Background product capture or cleanup was not confirmed.'
+            }
+          } finally {
+            if (Test-Path -LiteralPath $report) { Get-Content -LiteralPath $report -Raw }
+          }
+
       - name: Retain failed synthetic UI diagnostics
         if: failure() && steps.ui.outcome == 'failure'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

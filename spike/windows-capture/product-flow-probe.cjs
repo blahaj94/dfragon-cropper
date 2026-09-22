@@ -1,8 +1,9 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Node CJS harness launches the actual Electron product. */
 const assert = require('node:assert/strict')
-const { spawn } = require('node:child_process')
+const { spawn, spawnSync } = require('node:child_process')
 const { mkdir, mkdtemp, readFile, rm, stat, writeFile } = require('node:fs/promises')
 const { dirname, join, resolve } = require('node:path')
+const { release } = require('node:os')
 const { _electron } = require('@playwright/test')
 const koffi = require('koffi')
 
@@ -26,6 +27,9 @@ const result = {
   injection: manual
     ? 'manual mode; no synthetic injection'
     : 'synthetic keybd_event; physical keyboard unverified',
+  platform: process.platform,
+  release: release(),
+  scope: 'Actual product with a separate foreground process; elevated games are not exercised.',
   requestedPrintScreenCaptures: pressCount,
   startedAt: new Date().toISOString(),
   samples: []
@@ -34,6 +38,7 @@ let application
 let fixture
 let profile
 let fixtureProfile
+let fixtureState
 let outputRoot
 let overallDeadline
 
@@ -72,6 +77,7 @@ async function run() {
     timeout: 10_000
   })
   const page = await application.firstWindow({ timeout: 10_000 })
+  page.setDefaultTimeout(10_000)
   await page.waitForFunction(() => typeof window.spike?.getState === 'function')
   const runtime = await application.evaluate(({ app, screen }) => ({
     version: process.versions.electron,
@@ -92,7 +98,15 @@ async function run() {
   const initial = await state()
   assert.equal(initial.mode, 'keyboard-hook')
   assert.equal(initial.error, null)
+  assert.equal(initial.settingsError, null)
+  assert.equal(initial.settings.schemaVersion, 3)
+  assert.equal(initial.settings.shortcuts.capture.key, 'PrintScreen')
+  assert.equal(initial.settings.preferences.saveOriginal, true)
   assert.equal(initial.completed, 0)
+  const activeProfile = initial.settings.profiles.find(
+    (profile) => profile.id === initial.settings.activeProfileId
+  )
+  assert(activeProfile?.regions.length, 'No saved active ROI profile was loaded')
   const events = new Set()
   async function waitForCapture(expected, trigger, timeout = 5_000) {
     const deadline = Date.now() + timeout
@@ -103,6 +117,8 @@ async function run() {
         failed: current.failed,
         skipped: current.skipped,
         busy: current.busy,
+        error: current.error === null ? null : redact(current.error),
+        triggerStatus: current.triggerStatus,
         lastTrigger: current.lastCapture?.trigger ?? null
       }
       assert.equal(current.failed, 0, current.error || 'Capture failed')
@@ -117,7 +133,13 @@ async function run() {
         )
         assert.equal(metadata.eventId, capture.eventId)
         assert.equal(metadata.trigger, trigger)
-        assert.notEqual(metadata.source.backend, 'fixture')
+        assert.equal(metadata.source.backend, 'win32-gdi')
+        assert.equal(metadata.source.file, 'original.png')
+        assert.equal(metadata.profile.id, activeProfile.id)
+        assert.deepEqual(
+          metadata.regions.map(({ id, x, y, width, height }) => ({ id, x, y, width, height })),
+          activeProfile.regions
+        )
         for (const file of [
           metadata.source.file,
           ...metadata.regions.map((region) => region.file)
@@ -159,7 +181,7 @@ async function run() {
     getWindowProcess(getForeground(), pid)
     return pid[0]
   }
-  const fixtureState = join(dirname(output), `product-focus-${Date.now()}.json`)
+  fixtureState = join(dirname(output), `product-focus-${Date.now()}.json`)
   fixture = spawn(
     electronExecutable,
     [
@@ -176,11 +198,17 @@ async function run() {
       stdio: 'ignore'
     }
   )
+  let fixtureError
+  fixture.once('error', (error) => (fixtureError = error))
   assert(fixture.pid, 'Foreground fixture did not start')
   fixtureProfile = join(dirname(fixtureState), `profile-${fixture.pid}`)
   allowForeground(fixture.pid)
   const focusDeadline = Date.now() + 8_000
-  while (foregroundPid() !== fixture.pid && Date.now() < focusDeadline) await pause(100)
+  while (foregroundPid() !== fixture.pid && Date.now() < focusDeadline) {
+    if (fixtureError) throw fixtureError
+    assert.equal(fixture.exitCode, null, 'Foreground fixture exited before acquiring focus')
+    await pause(100)
+  }
   assert.equal(foregroundPid(), fixture.pid, 'Separate fixture did not become foreground')
   const clipboardBefore = getSequence()
   if (manual) {
@@ -201,8 +229,11 @@ async function run() {
     const start = performance.now()
     if (!manual) {
       keybdEvent(0x2c, 0x37, 0x0001, 0)
-      await pause(40)
-      keybdEvent(0x2c, 0x37, 0x0001 | 0x0002, 0)
+      try {
+        await pause(40)
+      } finally {
+        keybdEvent(0x2c, 0x37, 0x0001 | 0x0002, 0)
+      }
     }
     await waitForCapture(index + 2, 'printscreen', manual ? 180_000 : 5_000)
     const clipboardDeadline = Date.now() + 1_000
@@ -216,6 +247,7 @@ async function run() {
         ? { waitedMs: Math.round(performance.now() - start) }
         : { elapsedMs: Math.round(performance.now() - start) }),
       productRemainedBackground: true,
+      savedRoiCount: activeProfile.regions.length,
       clipboardSequenceChanged: true
     })
     if (manual) {
@@ -261,15 +293,30 @@ async function main() {
     clearTimeout(overallDeadline)
     let clean = true
     if (application) {
+      let closeDeadline
       try {
-        await application.close()
+        await Promise.race([
+          application.close(),
+          new Promise((_, reject) => {
+            closeDeadline = setTimeout(() => reject(new Error('Product did not quit')), 5_000)
+          })
+        ])
       } catch {
-        application.process().kill()
+        // Only the product process tree launched by this probe may be terminated.
+        const pid = application.process().pid
+        if (pid) spawnSync('taskkill.exe', ['/pid', String(pid), '/T', '/F'], { timeout: 5_000 })
         clean = false
+      } finally {
+        clearTimeout(closeDeadline)
       }
     }
     if (fixture) {
-      fixture.kill()
+      // Include the fixture's renderers, so a failed probe cannot leave foreground UI behind.
+      if (fixture.pid && fixture.exitCode === null && fixture.signalCode === null)
+        spawnSync('taskkill.exe', ['/pid', String(fixture.pid), '/T', '/F'], {
+          timeout: 5_000,
+          stdio: 'ignore'
+        })
       const fixtureExited = await new Promise((accept) => {
         if (fixture.exitCode !== null || fixture.signalCode !== null) return accept(true)
         const deadline = setTimeout(() => accept(false), 2_000)
@@ -280,7 +327,7 @@ async function main() {
       })
       clean = clean && fixtureExited
     }
-    for (const path of [profile, fixtureProfile]) {
+    for (const path of [profile, fixtureProfile, fixtureState]) {
       if (!path) continue
       try {
         await rm(path, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
@@ -292,6 +339,7 @@ async function main() {
     if (!clean) result.completed = false
     result.finishedAt = new Date().toISOString()
     await writeFile(output, JSON.stringify(result, null, 2))
+    process.exitCode = result.completed ? 0 : 1
     if (manual) {
       await writeFile(
         readyPath,
@@ -306,4 +354,7 @@ async function main() {
   }
 }
 
-void main()
+void main().catch((error) => {
+  console.error(redact(error instanceof Error ? error.message : error))
+  process.exitCode = 1
+})

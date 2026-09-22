@@ -8,6 +8,8 @@
 
 Windows x64에서 EXE를 쓰기 가능한 폴더에 두고 실행하세요. 설치 과정은 없습니다. 현재 0.x 버전은 코드서명되지 않은 미리보기 릴리스이며, Windows 10에서 주 모니터 캡처를 지원합니다.
 
+관리자 권한으로 실행한 게임에서만 단축키가 안 되면 [게임 단축키 안내](user-guide.md#게임에서만-단축키가-안-될-때)에 따라 앱도 같은 권한으로 실행하세요.
+
 각 릴리스에는 `SHA256SUMS.txt`도 포함됩니다. 다운로드한 EXE의 SHA-256을 PowerShell로 계산해 해당 파일의 값과 비교할 수 있습니다.
 
 ```powershell
@@ -37,7 +39,7 @@ Get-FileHash .\DFragonCropper-0.6.0-x64-portable.exe -Algorithm SHA256
 | Actions의 수동 실행                | 선택한 ref 검사·빌드, artifact 보관. 릴리스는 게시하지 않음 |
 | `v<version>` 태그 push             | 같은 검사·빌드 후 해당 버전의 GitHub Release 게시           |
 
-검사는 lint, format, typecheck, 단위 테스트와 실제 Electron의 **합성 프레임 UI 테스트**를 포함합니다. 추가로 별도 foreground 프로세스와 `SendInput`을 사용하는 native 단축키 fixture를 실행합니다. 이 입력도 합성이며 실제 물리 키 입력은 아닙니다. 패키지는 Windows runner에서 native 의존성을 설치해 만듭니다. Hosted runner 검사를 실제 Windows 10의 물리 키보드·DPI·커서 제외 검증으로 해석하지 않습니다. 그 근거는 별도의 [실기 기록](local-mvp-verification.md)에 있습니다.
+검사는 lint, format, typecheck, 단위 테스트와 실제 Electron의 **합성 프레임 UI 테스트**를 포함합니다. 추가로 별도 foreground 프로세스와 `SendInput`을 사용하는 native 단축키 fixture, 실제 앱에서 버튼 1회·백그라운드 PrintScreen 3회로 GDI 원본·ROI PNG 저장을 확인하는 product fixture를 실행합니다. 두 fixture의 키 입력은 합성이며 관리자 권한 게임을 대상으로 하지 않습니다. 패키지는 Windows runner에서 native 의존성을 설치해 만듭니다. Hosted runner 검사를 실제 Windows 10의 물리 키보드·DPI·커서 제외 검증으로 해석하지 않습니다. 그 근거는 별도의 [실기 기록](local-mvp-verification.md)에 있습니다.
 
 브랜치의 최신 빌드를 확인하려면 [Actions](https://github.com/blahaj94/dfragon-cropper/actions/workflows/windows.yml)의 성공한 실행에서 artifact를 내려받습니다. artifact는 개발 빌드를 확인하기 위한 보관 파일이며, 공개 다운로드는 Releases를 사용합니다.
 

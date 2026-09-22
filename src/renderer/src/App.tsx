@@ -91,6 +91,13 @@ export function App() {
       </section>
 
       <p role="status">{state?.triggerStatus ?? 'Loading capture status…'}</p>
+      {state?.mode === 'keyboard-hook' && (
+        <p role="note">
+          If shortcuts fail in a game running as administrator, use Quit to fully close this app,
+          then right-click its EXE and choose Run as administrator. Closing the window may only hide
+          it in the tray.
+        </p>
+      )}
       {state?.settingsError && (
         <p role="alert">
           Configuration needs attention. {state.settingsError} Captures and editing are paused; any
